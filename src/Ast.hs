@@ -1,6 +1,6 @@
 module Ast where
 
-newtype Program = Program [Expression]
+newtype Program = Program [Statement]
     deriving (Eq)
 
 instance Show Program where
@@ -20,6 +20,7 @@ data Expression
     | IdentLit String
     | BoolLit Bool
     | IntLit Integer
+    | App Expression Expression
     deriving (Eq)
 
 instance Show Expression where
