@@ -1,9 +1,9 @@
 module Parser where
 
 import Error
-import Ast
-import Token
+import qualified Ast as A
+import qualified Token as T
 
-parseTok :: [Token] -> Result Program
-parseTok [] = Right $ Program []
-parseTok _ = Left $ ParseError "Not Implemented"
+parseExpr :: [T.Token] -> Result (A.Expression, [T.Token])
+parseExpr _ = Left $ LexError "foo"
+parseExpr _ = Left $ LexError "foo"

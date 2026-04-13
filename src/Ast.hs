@@ -1,6 +1,6 @@
 module Ast where
 
-newtype Program = Program [Expression]
+newtype Program = Program [Statement]
     deriving (Eq)
 
 instance Show Program where
@@ -13,13 +13,15 @@ data Statement
 
 instance Show Statement where
     show (Expr expr) = show expr ++ ";"
-    show (Binding name params expr) = unwords (name:params)  ++ " = " ++ show expr
+    show (Binding name params expr) =
+        unwords (name:params)  ++ " = " ++ show expr ++ ";"
 
 data Expression
     = Infix Expression Operation Expression
     | IdentLit String
     | BoolLit Bool
     | IntLit Integer
+    | App Expression Expression
     deriving (Eq)
 
 instance Show Expression where

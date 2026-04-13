@@ -7,14 +7,19 @@ import Token
 import qualified Ast
 import Parser
 
-parseTest :: String -> String -> String -> Test
-parseTest desc expect input  =
-    TestCase $ assertEqual desc (Right expect) (show <$> (lexString input >>= parseTok))
+main :: IO ()
+main = do
+    _ <- runTestTT tests
+    return ()
+
+tests :: Test
+tests = TestList [lexTests, parseExprTests]
 
 lexTest :: String -> [Token] -> String -> Test
 lexTest desc res input = TestCase $ assertEqual desc (Right res) (lexString input)
 
-tests = TestList
+lexTests :: Test
+lexTests = TestList
     [ lexTest "empty case" [] ""
     , lexTest "space case" [] "   "
     , lexTest "space case" [Boolean True, Boolean False] " true false "
@@ -31,19 +36,27 @@ tests = TestList
         , Ident "y"
         , Semicolon
         ] "add x y = x + y;"
-    , parseTest "Test Statement Expr" "x;" "x"
-    , parseTest "Test Statement Binding" "ah" ""
-    , parseTest "Test Expr Infix" "ah" ""
-    , parseTest "Test Expr IdentLit" "ah" ""
-    , parseTest "Test Expr BoolLit" "ah" ""
-    , parseTest "Test Expr IntLit" "ah" ""
-    , parseTest "Test Complex" "ah" ""
-    , parseTest "Test Precedence a b c == (a b) c, a b + c d = (a b) + (c d)" "ah" ""
-    , parseTest "Test Precedence" "ah" ""
-    , parseTest "Test Empty" "" ""
     ]
 
-main :: IO ()
-main = do
-    _ <- runTestTT tests
-    return ()
+exprTest :: String -> String -> Test
+exprTest expect input = TestCase $ assertEqual ":)" expect
+    (
+    case lexString input >>= parseExpr of
+        Left e -> "Error: " ++ show e
+        Right (expr, _) -> show expr
+    )
+
+parseExprTests :: Test
+parseExprTests = TestList
+    [ exprTest "foo" "foo"
+    , exprTest "true" "true"
+    , exprTest "4" "5"
+    , exprTest "(foo bar)" "foo bar"
+    , exprTest "((foo bar) baz)" "foo bar baz"
+    , exprTest "(foo (bar baz))" "foo (bar baz)"
+    , exprTest "(1 + 2)" "1 + 2"
+    , exprTest "((1 + 2) + 3)" "1 + 2 + 3"
+    , exprTest "(1 + (2 + 3))" "1 + (2 + 3)"
+    , exprTest "((app 1) + 2)" "app 1 + 2"
+    -- todo show rest
+    ]
