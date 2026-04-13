@@ -9,10 +9,7 @@ import Parser
 
 parseTest :: String -> String -> String -> Test
 parseTest desc expect input  =
-    TestCase
-        $ assertEqual desc
-            (Right expect)
-            (show <$> parseTok <$> lexString input)
+    TestCase $ assertEqual desc (Right expect) (show <$> (lexString input >>= parseTok))
 
 lexTest :: String -> [Token] -> String -> Test
 lexTest desc res input = TestCase $ assertEqual desc (Right res) (lexString input)
@@ -34,7 +31,7 @@ tests = TestList
         , Ident "y"
         , Semicolon
         ] "add x y = x + y;"
-    , parseTest "Test Statement Expr" "ah" ""
+    , parseTest "Test Statement Expr" "x;" "x"
     , parseTest "Test Statement Binding" "ah" ""
     , parseTest "Test Expr Infix" "ah" ""
     , parseTest "Test Expr IdentLit" "ah" ""
@@ -43,6 +40,7 @@ tests = TestList
     , parseTest "Test Complex" "ah" ""
     , parseTest "Test Precedence a b c == (a b) c, a b + c d = (a b) + (c d)" "ah" ""
     , parseTest "Test Precedence" "ah" ""
+    , parseTest "Test Empty" "" ""
     ]
 
 main :: IO ()

@@ -1,5 +1,11 @@
 module Ast where
 
+newtype Program = Program [Expression]
+    deriving (Eq)
+
+instance Show Program where
+    show (Program exprs) = unlines $ show <$> exprs
+
 data Statement
     = Expr Expression
     | Binding String [String] Expression

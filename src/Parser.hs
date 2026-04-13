@@ -4,5 +4,6 @@ import Error
 import Ast
 import Token
 
-parseTok :: [Token] -> Result [Statement]
+parseTok :: [Token] -> Result Program
+parseTok [] = Right $ Program []
 parseTok _ = Left $ ParseError "Not Implemented"
