@@ -1,3 +1,5 @@
+use orca::start;
+
 fn main() {
-    println!("Hello, world!");
+    start();
 }

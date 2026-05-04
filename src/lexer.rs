@@ -8,13 +8,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn read_number(&mut self) -> i64 {
-        // Todo: fix this, to not eat the thing
-        self.0
-            .by_ref()
-            .take_while(|x: &char| x.is_numeric())
-            .collect::<String>()
-            .parse()
-            .unwrap()
+        self.0.take_while_slice(|x| x.is_numeric()).parse().unwrap()
     }
 
     fn read_ident(&mut self) -> &'a str {
@@ -30,48 +24,19 @@ impl<'a> Iterator for Lexer<'a> {
     type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.0.peek() {
-            Some(' ') | Some('\n') => {
+        self.0.peek().and_then(|c: char| match c {
+            ' ' | '\n' => {
                 self.0.next();
                 self.next()
             }
-            Some('(') => {
+            c if TryInto::<Token>::try_into(c).is_ok() => {
                 self.0.next();
-                Some(Token::LParen)
+                c.try_into().ok()
             }
-            Some('/') => {
-                self.0.next();
-                Some(Token::Div)
-            }
-            Some(')') => {
-                self.0.next();
-                Some(Token::RParen)
-            }
-            Some('=') => {
-                self.0.next();
-                Some(Token::Assign)
-            }
-            Some('+') => {
-                self.0.next();
-                Some(Token::Plus)
-            }
-            Some(';') => {
-                self.0.next();
-                Some(Token::Semicolon)
-            }
-            Some('-') => {
-                self.0.next();
-                Some(Token::Minus)
-            }
-            Some('*') => {
-                self.0.next();
-                Some(Token::Mult)
-            }
-            Some(c) if c.is_numeric() => Some(Token::Int(self.read_number())),
-            Some(c) if c.is_alphabetic() => Some(Token::Ident(self.read_ident())),
-            Some(c) => todo!("{c}"),
-            None => None,
-        }
+            c if c.is_numeric() => Some(Token::Int(self.read_number())),
+            c if c.is_alphabetic() => Some(Token::Ident(self.read_ident())),
+            _ => None,
+        })
     }
 }
 
@@ -82,7 +47,7 @@ mod tests {
     #[test]
     fn test_lexer() {
         let input = "
-        200 - 12* (foo/bar);
+        200-12 * (foo / bar);
         add_two x = x + 2;
         ";
 
