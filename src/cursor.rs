@@ -1,38 +1,57 @@
-pub struct Cursor<'a> {
-    input: &'a str,
+pub struct Cursor<'a, T> {
+    input: &'a [T],
     pos: usize,
 }
 
-impl<'a> Cursor<'a> {
-    pub fn new(input: &'a str) -> Self {
+impl<'a, T> Cursor<'a, T> {
+    pub fn new(input: &'a [T]) -> Self {
         Self { input, pos: 0 }
     }
 
-    pub fn peek(&self) -> Option<char> {
-        self.input.chars().nth(self.pos)
+    pub fn peek(&self) -> Option<&'a T> {
+        self.input.get(self.pos)
     }
 
-    pub fn take_while_slice<F>(&mut self, f: F) -> &'a str
+    pub fn peek_n(&self, n: usize) -> Option<&'a T> {
+        self.input.get(self.pos + n)
+    }
+
+    pub fn eat_n(&mut self, n: usize) {
+        self.pos += n;
+    }
+
+    pub fn eat_while<F>(&mut self, mut f: F) -> &'a [T]
     where
-        F: FnMut(&char) -> bool,
+        F: FnMut(&T) -> bool,
     {
-        let res = self
-            .input
-            .chars()
-            .skip(self.pos)
-            .take_while(f)
-            .collect::<String>();
-        let prev_pos = self.pos;
-        self.pos += res.len();
-        self.input.get(prev_pos..self.pos).unwrap()
+        let start = self.pos;
+        self.pos += self.input[self.pos..]
+            .iter()
+            .take_while(|item| f(item))
+            .count();
+        &self.input[start..self.pos]
+    }
+
+    pub fn peek_while<F>(&mut self, mut f: F) -> &'a [T]
+    where
+        F: FnMut(&T) -> bool,
+    {
+        let start = self.pos;
+        let end = self.pos
+            + self.input[self.pos..]
+                .iter()
+                .take_while(|item| f(item))
+                .count();
+        &self.input[start..end]
     }
 }
 
-impl<'a> Iterator for Cursor<'a> {
-    type Item = char;
-    fn next(&mut self) -> Option<char> {
-        let c = self.input.chars().nth(self.pos);
+impl<'a, T> Iterator for Cursor<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let c = self.peek()?;
         self.pos += 1;
-        c
+        Some(c)
     }
 }

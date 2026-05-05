@@ -1,0 +1,209 @@
+use crate::{
+    ast::{Expr, Program, Stmt},
+    cursor::Cursor,
+    token::Token,
+};
+
+pub struct Parser<'a>(Cursor<'a, Token<'a>>);
+
+#[derive(Debug)]
+pub enum Error {
+    Infix,
+    NoClosingParen,
+    NoExpr,
+}
+
+#[derive(PartialOrd, PartialEq)]
+enum Prec {
+    Lowest,
+    Sum,
+    Product,
+    Call,
+}
+
+impl Prec {
+    fn token_prec(token: &Token) -> Self {
+        use Prec::*;
+        match token {
+            Token::Plus | Token::Minus => Sum,
+            Token::Mult | Token::Div => Product,
+            Token::Ident(_) | Token::Int(_) | Token::LParen => Call,
+            _ => Lowest,
+        }
+    }
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(input: &'a [Token<'a>]) -> Self {
+        Parser(Cursor::new(input))
+    }
+
+    pub fn parse_program(&mut self) -> Result<Program, Error> {
+        let mut res = Vec::new();
+        while let Some(v) = self.parse_stmt()? {
+            res.push(v);
+        }
+        Ok(Program(res))
+    }
+
+    fn parse_stmt(&mut self) -> Result<Option<Stmt>, Error> {
+        if let Some((n, a, e)) = self.parse_bind()? {
+            if self.0.peek() == Some(&Token::Semicolon) {
+                self.0.next();
+            }
+            return Ok(Some(Stmt::Bind(n, a, e)));
+        }
+        Ok(self.parse_expr(Prec::Lowest)?.map(|e| {
+            if self.0.peek() == Some(&Token::Semicolon) {
+                self.0.next();
+            }
+            e.into()
+        }))
+    }
+
+    fn parse_bind(&mut self) -> Result<Option<(String, Vec<String>, Expr)>, Error> {
+        let idents = self
+            .0
+            .peek_while(|t| matches!(t, Token::Ident(_)))
+            .iter()
+            .map(|i| match i {
+                Token::Ident(i) => str::from_utf8(i).unwrap().to_string(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+
+        if idents.is_empty() || self.0.peek_n(idents.len()) != Some(&Token::Assign) {
+            return Ok(None);
+        }
+
+        // plus 1 for the assign token
+        self.0.eat_n(idents.len() + 1);
+
+        let expr = self.parse_expr(Prec::Lowest)?.ok_or(Error::NoExpr)?;
+        Ok(Some((idents[0].clone(), idents[1..].to_vec(), expr)))
+    }
+
+    fn parse_expr(&mut self, prec: Prec) -> Result<Option<Expr>, Error> {
+        let mut lhs = match self.parse_prefix() {
+            Ok(Some(v)) => v,
+            o => return o,
+        };
+
+        while let Some(tok) = self.0.peek()
+            && prec < Prec::token_prec(tok)
+        {
+            lhs = self.parse_infix(lhs)?;
+        }
+
+        Ok(Some(lhs))
+    }
+
+    fn parse_prefix(&mut self) -> Result<Option<Expr>, Error> {
+        match self.0.next() {
+            None => Ok(None),
+            Some(Token::Int(i)) => Ok(Some(Expr::Int(*i))),
+            Some(Token::Ident(i)) => Ok(Some(Expr::Var(str::from_utf8(i).unwrap().to_string()))),
+            Some(Token::LParen) => {
+                let expr = self.parse_expr(Prec::Lowest);
+                if self.0.next() != Some(&Token::RParen) {
+                    return Err(Error::NoClosingParen);
+                }
+                expr
+            }
+            Some(t) => todo!("prefix {t}"),
+        }
+    }
+
+    fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
+        let op = self.0.peek().ok_or(Error::Infix)?;
+        match op {
+            Token::Plus | Token::Minus | Token::Div | Token::Mult => {
+                self.0.next();
+                let rhs = self.parse_expr(Prec::token_prec(op))?.ok_or(Error::Infix)?;
+                Ok(Expr::Infix(
+                    Box::new(lhs),
+                    op.try_into().unwrap(),
+                    Box::new(rhs),
+                ))
+            }
+            Token::Ident(..) | Token::Int(..) | Token::LParen => Ok(Expr::Call(
+                Box::new(lhs),
+                Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::Infix)?),
+            )),
+            t => todo!("infix {t}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ast::InfixOp, lexer::Lexer};
+
+    #[test]
+    fn test_parse_expr() {
+        let tests = [
+            ("42", "42;"),
+            ("42;", "42;"),
+            ("x", "x;"),
+            ("1 + 2", "(1 + 2);"),
+            ("x + y", "(x + y);"),
+            ("3 - 4", "(3 - 4);"),
+            ("8 / 2", "(8 / 2);"),
+            ("5 * 6", "(5 * 6);"),
+            ("1 + 2 * 3", "(1 + (2 * 3));"),
+            ("1 * 2 + 3", "((1 * 2) + 3);"),
+            ("1 + 2 + 3", "((1 + 2) + 3);"),
+            ("8 / 4 / 2", "((8 / 4) / 2);"),
+            ("(1 + (2 + 3))", "(1 + (2 + 3));"),
+            ("(1 + 2)", "(1 + 2);"),
+            ("x * 2 + y", "((x * 2) + y);"),
+            ("1 + 2 * 3 + 4", "((1 + (2 * 3)) + 4);"),
+            ("f x", "(f x);"),
+            ("f 1", "(f 1);"),
+            ("f x + 1", "((f x) + 1);"),
+            ("f (x + 1)", "(f (x + 1));"),
+            ("f x + g y", "((f x) + (g y));"),
+            ("f (g x)", "(f (g x));"),
+            ("f (x + y) * 2", "((f (x + y)) * 2);"),
+            ("f g x", "((f g) x);"),
+            ("((f g) x)", "((f g) x);"),
+        ];
+
+        for (input, expected) in tests {
+            let lexer = Lexer::new(input.as_bytes())
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let parser = Parser::new(&lexer).parse_program().unwrap().0;
+            assert_eq!(parser.len(), 1);
+            assert_eq!(parser[0].to_string(), expected)
+        }
+    }
+
+    #[test]
+    fn test_parse() {
+        let input = "x + y ; add x y = x + y;";
+        let lexer = Lexer::new(input.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            Parser::new(&lexer).parse_program().unwrap().0,
+            vec![
+                Stmt::Expr(Expr::Infix(
+                    Box::new(Expr::Var("x".to_string())),
+                    InfixOp::Add,
+                    Box::new(Expr::Var("y".to_string())),
+                )),
+                Stmt::Bind(
+                    "add".to_string(),
+                    vec!["x".to_string(), "y".to_string()],
+                    Expr::Infix(
+                        Box::new(Expr::Var("x".to_string())),
+                        InfixOp::Add,
+                        Box::new(Expr::Var("y".to_string())),
+                    )
+                ),
+            ],
+        );
+    }
+}
