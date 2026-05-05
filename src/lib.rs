@@ -1,5 +1,6 @@
 mod ast;
 mod cursor;
+mod env;
 mod eval;
 mod lexer;
 mod parser;

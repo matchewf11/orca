@@ -1,11 +1,9 @@
 use crate::token::Token;
 use std::fmt;
 
+pub type Program = Vec<Stmt>;
 type Args = Vec<String>;
 type Name = String;
-
-#[derive(Debug)]
-pub struct Program(pub Vec<Stmt>);
 
 #[derive(Debug, PartialEq)]
 pub enum Stmt {
@@ -13,7 +11,7 @@ pub enum Stmt {
     Expr(Expr),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Int(i64),
     Bool(bool),
@@ -22,7 +20,7 @@ pub enum Expr {
     Call(Box<Expr>, Box<Expr>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum InfixOp {
     Add,
     Sub,
@@ -32,7 +30,7 @@ pub enum InfixOp {
 
 #[derive(Debug)]
 pub enum Error {
-    InvalidToken(String),
+    InvalidToken,
 }
 
 impl TryFrom<&Token<'_>> for InfixOp {
@@ -43,7 +41,7 @@ impl TryFrom<&Token<'_>> for InfixOp {
             Token::Minus => InfixOp::Sub,
             Token::Mult => InfixOp::Mul,
             Token::Div => InfixOp::Div,
-            t => return Err(Error::InvalidToken(format!("{t}"))),
+            _ => return Err(Error::InvalidToken),
         })
     }
 }
@@ -70,12 +68,13 @@ impl fmt::Display for Expr {
 impl fmt::Display for InfixOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use InfixOp::*;
-        match self {
-            Add => write!(f, "+"),
-            Sub => write!(f, "-"),
-            Mul => write!(f, "*"),
-            Div => write!(f, "/"),
-        }
+        let s = match self {
+            Add => "+",
+            Sub => "-",
+            Mul => "*",
+            Div => "/",
+        };
+        write!(f, "{s}")
     }
 }
 
@@ -84,7 +83,7 @@ impl fmt::Display for Stmt {
         use Stmt::*;
         match self {
             Expr(e) => write!(f, "{e};"),
-            e => todo!("write out function call: {e}"),
+            Bind(n, a, b) => write!(f, "{n} [{}] = {b}", a.join(",")),
         }
     }
 }

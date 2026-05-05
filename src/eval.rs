@@ -1,52 +1,24 @@
-use crate::{
-    ast::{Program, Stmt, Expr, InfixOp},
-    value::Value
-};
+use crate::{ast::Program, value::Value};
+use std::fmt;
 
+#[derive(Debug)]
+pub struct Error;
+
+#[derive(Debug)]
 pub struct Eval(Program);
 
 impl Eval {
     pub fn new(prog: Program) -> Self {
-        Eval(prog)
+        Self(prog)
     }
 
-    pub fn eval(prog: Program) -> Option<Value> {
-        prog.0
-            .iter()
-            .map(|s| Self::eval_stmt(s))
-            .last()
-            .flatten()
-    }
-
-    pub fn eval_stmt(stmt: &Stmt) -> Option<Value> {
-        match stmt {
-            Stmt::Bind(..) => None,
-            Stmt::Expr(e) => Some(Self::eval_expr(e)),
-        }
-    }
-
-    pub fn eval_expr(expr: &Expr) -> Value {
-        match expr {
-            Expr::Int(n) => Value::Int(*n),
-            Expr::Bool(b) => todo!(),
-            Expr::Infix(lhs, op, rhs) => {
-                let lhs = Self::eval_expr(lhs);
-                let rhs = Self::eval_expr(rhs);
-                match (lhs, op, rhs) {
-                    (Value::Int(l), InfixOp::Add, Value::Int(r)) => Value::Int(l + r),
-                    _ => todo!(),
-                }
-            }
-            Expr::Var(..) => todo!(),
-            Expr::Call(..) => todo!(),
-        }
+    pub fn eval(&self) -> Result<Option<Value>, Error> {
+        Ok(None)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_eval() {}
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error")
+    }
 }

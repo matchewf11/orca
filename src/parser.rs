@@ -3,14 +3,31 @@ use crate::{
     cursor::Cursor,
     token::Token,
 };
+use std::fmt;
 
 pub struct Parser<'a>(Cursor<'a, Token<'a>>);
 
 #[derive(Debug)]
 pub enum Error {
-    Infix,
-    NoClosingParen,
-    NoExpr,
+    FnBody,
+    PrefixFn,
+    InfixFn,
+    ClosingParen,
+    InfixRhs,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Error::*;
+        let s = match self {
+            FnBody => "function has no body",
+            PrefixFn => "no prefix function found",
+            InfixFn => "no infix function found",
+            ClosingParen => "parenthesis are not closed",
+            InfixRhs => "no rhs to the infix",
+        };
+        write!(f, "{s}")
+    }
 }
 
 #[derive(PartialOrd, PartialEq)]
@@ -24,11 +41,12 @@ enum Prec {
 impl Prec {
     fn token_prec(token: &Token) -> Self {
         use Prec::*;
+        use Token::*;
         match token {
-            Token::Plus | Token::Minus => Sum,
-            Token::Mult | Token::Div => Product,
-            Token::Ident(_) | Token::Int(_) | Token::LParen | Token::Bool(_) => Call,
-            _ => Lowest,
+            Semicolon | RParen | Assign => Lowest,
+            Plus | Minus => Sum,
+            Mult | Div => Product,
+            Ident(_) | Int(_) | LParen | Bool(_) => Call,
         }
     }
 }
@@ -43,34 +61,29 @@ impl<'a> Parser<'a> {
         while let Some(v) = self.parse_stmt()? {
             res.push(v);
         }
-        Ok(Program(res))
+        Ok(res)
     }
 
     fn parse_stmt(&mut self) -> Result<Option<Stmt>, Error> {
-        if let Some((n, a, e)) = self.parse_bind()? {
-            if self.0.peek() == Some(&Token::Semicolon) {
-                self.0.next();
-            }
-            return Ok(Some(Stmt::Bind(n, a, e)));
+        let stmt = if let Some((n, a, e)) = self.parse_bind()? {
+            Some(Stmt::Bind(n, a, e))
+        } else {
+            self.parse_expr(Prec::Lowest)?.map(Into::into)
+        };
+
+        // consume ';' if there
+        if self.0.peek() == Some(&Token::Semicolon) {
+            self.0.next();
         }
-        Ok(self.parse_expr(Prec::Lowest)?.map(|e| {
-            if self.0.peek() == Some(&Token::Semicolon) {
-                self.0.next();
-            }
-            e.into()
-        }))
+
+        Ok(stmt)
     }
 
     fn parse_bind(&mut self) -> Result<Option<(String, Vec<String>, Expr)>, Error> {
-        let idents = self
-            .0
-            .peek_while(|t| matches!(t, Token::Ident(_)))
-            .iter()
-            .map(|i| match i {
-                Token::Ident(i) => str::from_utf8(i).unwrap().to_string(),
-                _ => unreachable!(),
-            })
-            .collect::<Vec<_>>();
+        let idents = self.0.peek_while_map(|i| match i {
+            Token::Ident(i) => Some(str::from_utf8(i).unwrap().to_string()),
+            _ => None,
+        });
 
         if idents.is_empty() || self.0.peek_n(idents.len()) != Some(&Token::Assign) {
             return Ok(None);
@@ -79,7 +92,7 @@ impl<'a> Parser<'a> {
         // plus 1 for the assign token
         self.0.eat_n(idents.len() + 1);
 
-        let expr = self.parse_expr(Prec::Lowest)?.ok_or(Error::NoExpr)?;
+        let expr = self.parse_expr(Prec::Lowest)?.ok_or(Error::FnBody)?;
         Ok(Some((idents[0].clone(), idents[1..].to_vec(), expr)))
     }
 
@@ -106,21 +119,28 @@ impl<'a> Parser<'a> {
             Some(Token::LParen) => {
                 let expr = self.parse_expr(Prec::Lowest);
                 if self.0.next() != Some(&Token::RParen) {
-                    return Err(Error::NoClosingParen);
+                    return Err(Error::ClosingParen);
                 }
                 expr
             }
             Some(Token::Bool(b)) => Ok(Some(Expr::Bool(*b))),
-            Some(t) => todo!("prefix {t}"),
+            Some(Token::Assign)
+            | Some(Token::Plus)
+            | Some(Token::Minus)
+            | Some(Token::Mult)
+            | Some(Token::Semicolon)
+            | Some(Token::RParen)
+            | Some(Token::Div) => Err(Error::PrefixFn),
         }
     }
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
-        let op = self.0.peek().ok_or(Error::Infix)?;
-        match op {
+        match self.0.peek().unwrap() {
             Token::Plus | Token::Minus | Token::Div | Token::Mult => {
-                self.0.next();
-                let rhs = self.parse_expr(Prec::token_prec(op))?.ok_or(Error::Infix)?;
+                let op = self.0.next().unwrap();
+                let rhs = self
+                    .parse_expr(Prec::token_prec(op))?
+                    .ok_or(Error::InfixRhs)?;
                 Ok(Expr::Infix(
                     Box::new(lhs),
                     op.try_into().unwrap(),
@@ -129,9 +149,9 @@ impl<'a> Parser<'a> {
             }
             Token::Ident(..) | Token::Int(..) | Token::LParen | Token::Bool(..) => Ok(Expr::Call(
                 Box::new(lhs),
-                Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::Infix)?),
+                Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::FnBody)?),
             )),
-            t => todo!("infix {t}"),
+            Token::Assign | Token::Semicolon | Token::RParen => Err(Error::InfixFn),
         }
     }
 }
@@ -178,7 +198,7 @@ mod tests {
             let lexer = Lexer::new(input.as_bytes())
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
-            let parser = Parser::new(&lexer).parse_program().unwrap().0;
+            let parser = Parser::new(&lexer).parse_program().unwrap();
             assert_eq!(parser.len(), 1);
             assert_eq!(parser[0].to_string(), expected)
         }
@@ -191,7 +211,7 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         assert_eq!(
-            Parser::new(&lexer).parse_program().unwrap().0,
+            Parser::new(&lexer).parse_program().unwrap(),
             vec![
                 Stmt::Expr(Expr::Infix(
                     Box::new(Expr::Var("x".to_string())),

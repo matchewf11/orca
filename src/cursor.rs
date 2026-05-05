@@ -32,6 +32,7 @@ impl<'a, T> Cursor<'a, T> {
         &self.input[start..self.pos]
     }
 
+    #[allow(dead_code)]
     pub fn peek_while<F>(&mut self, mut f: F) -> &'a [T]
     where
         F: FnMut(&T) -> bool,
@@ -43,6 +44,19 @@ impl<'a, T> Cursor<'a, T> {
                 .take_while(|item| f(item))
                 .count();
         &self.input[start..end]
+    }
+
+    pub fn peek_while_map<F, M>(&mut self, mut f: F) -> Vec<M>
+    where
+        F: FnMut(&T) -> Option<M>,
+    {
+        let start = self.pos;
+        let end = self.pos
+            + self.input[self.pos..]
+                .iter()
+                .take_while(|item| f(item).is_some())
+                .count();
+        self.input[start..end].iter().filter_map(f).collect()
     }
 }
 

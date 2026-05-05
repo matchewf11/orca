@@ -1,5 +1,5 @@
 use crate::{cursor::Cursor, token::Token};
-use std::num::ParseIntError;
+use std::{fmt, num::ParseIntError};
 
 pub struct Lexer<'a>(Cursor<'a, u8>);
 
@@ -15,29 +15,45 @@ impl<'a> Lexer<'a> {
     }
 
     fn read_ident(&mut self) -> &'a [u8] {
-        self.0.eat_while(|c| c.is_ascii_alphabetic() || *c == b'_')
+        self.0.eat_while(|b| b.is_ascii_alphabetic() || *b == b'_')
     }
 }
 
 #[derive(Debug)]
-pub struct Error;
+pub enum Error {
+    Number(ParseIntError),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Error::*;
+        match self {
+            Number(e) => write!(f, "failed to parse number: {e}"),
+        }
+    }
+}
 
 impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Token<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.peek().and_then(|c| match c {
-            b' ' | b'\n' => {
-                self.0.next();
-                self.next()
-            }
-            c if c.is_ascii_digit() => Some(Ok(Token::Int(self.read_number().unwrap()))),
-            c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
-            &c => {
-                self.0.next();
-                c.try_into().ok().map(Ok)
-            }
-        })
+        match self.0.peek() {
+            None => None,
+            Some(c) => match c {
+                b' ' | b'\n' => {
+                    self.0.next();
+                    self.next()
+                }
+                c if c.is_ascii_digit() => {
+                    Some(self.read_number().map(Token::Int).map_err(Error::Number))
+                }
+                c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
+                &c => {
+                    self.0.next();
+                    c.try_into().ok().map(Ok)
+                }
+            },
+        }
     }
 }
 

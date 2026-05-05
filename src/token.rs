@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Token<'a> {
     Ident(&'a [u8]),
     Int(i64),
+    Bool(bool),
     Assign,
     Plus,
     Minus,
@@ -12,16 +13,15 @@ pub enum Token<'a> {
     Semicolon,
     LParen,
     RParen,
-    Bool(bool),
 }
 
 impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Token::*;
-
         let s = match self {
             Ident(i) => return write!(f, "{}", str::from_utf8(i).unwrap()),
             Int(i) => return write!(f, "{i}"),
+            Bool(b) => return write!(f, "{b}"),
             Assign => "=",
             Plus => "+",
             Minus => "-",
@@ -30,19 +30,15 @@ impl fmt::Display for Token<'_> {
             Semicolon => ";",
             LParen => "(",
             RParen => ")",
-            Bool(b) => return write!(f, "{b}")
         };
-
         write!(f, "{s}")
     }
 }
 
-pub enum Error {
-    UnknownSymbol,
-}
+pub struct UknownSymbolError;
 
 impl TryFrom<u8> for Token<'static> {
-    type Error = Error;
+    type Error = UknownSymbolError;
 
     fn try_from(c: u8) -> Result<Self, Self::Error> {
         Ok(match c {
@@ -54,7 +50,7 @@ impl TryFrom<u8> for Token<'static> {
             b';' => Token::Semicolon,
             b'-' => Token::Minus,
             b'*' => Token::Mult,
-            b => return Err(Error::UnknownSymbol),
+            _ => return Err(UknownSymbolError),
         })
     }
 }
@@ -64,7 +60,7 @@ impl<'a> Token<'a> {
         match bytes {
             b"true" => Token::Bool(true),
             b"false" => Token::Bool(false),
-            _ => Token::Ident(bytes)
+            _ => Token::Ident(bytes),
         }
     }
 }
