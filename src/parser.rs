@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, Program, Stmt},
+    ast::{Expr, PrefixOp, Program, Stmt},
     cursor::Cursor,
     token::Token,
 };
@@ -9,22 +9,24 @@ pub struct Parser<'a>(Cursor<'a, Token<'a>>);
 
 #[derive(Debug)]
 pub enum Error {
+    PrefixFn(String),
+    InfixFn(String),
     FnBody,
-    PrefixFn,
-    InfixFn,
     ClosingParen,
     InfixRhs,
+    PrefixRhs,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Error::*;
         let s = match self {
+            PrefixFn(s) => return write!(f, "no prefix fn found: {s}"),
+            InfixFn(s) => return write!(f, "no infix fn found: {s}"),
             FnBody => "function has no body",
-            PrefixFn => "no prefix function found",
-            InfixFn => "no infix function found",
             ClosingParen => "parenthesis are not closed",
             InfixRhs => "no rhs to the infix",
+            PrefixRhs => "no rhs to the prefix",
         };
         write!(f, "{s}")
     }
@@ -35,6 +37,7 @@ enum Prec {
     Lowest,
     Sum,
     Product,
+    Prefix,
     Call,
 }
 
@@ -116,6 +119,7 @@ impl<'a> Parser<'a> {
             None => Ok(None),
             Some(Token::Int(i)) => Ok(Some(Expr::Int(*i))),
             Some(Token::Ident(i)) => Ok(Some(Expr::Var(str::from_utf8(i).unwrap().to_string()))),
+            Some(Token::Bool(b)) => Ok(Some(Expr::Bool(*b))),
             Some(Token::LParen) => {
                 let expr = self.parse_expr(Prec::Lowest);
                 if self.0.next() != Some(&Token::RParen) {
@@ -123,14 +127,10 @@ impl<'a> Parser<'a> {
                 }
                 expr
             }
-            Some(Token::Bool(b)) => Ok(Some(Expr::Bool(*b))),
-            Some(Token::Assign)
-            | Some(Token::Plus)
-            | Some(Token::Minus)
-            | Some(Token::Mult)
-            | Some(Token::Semicolon)
-            | Some(Token::RParen)
-            | Some(Token::Div) => Err(Error::PrefixFn),
+            Some(Token::Minus) => Ok(self
+                .parse_expr(Prec::Prefix)?
+                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr)))),
+            Some(t) => Err(Error::PrefixFn(t.to_string())),
         }
     }
 
@@ -147,11 +147,13 @@ impl<'a> Parser<'a> {
                     Box::new(rhs),
                 ))
             }
-            Token::Ident(..) | Token::Int(..) | Token::LParen | Token::Bool(..) => Ok(Expr::Call(
-                Box::new(lhs),
-                Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::FnBody)?),
-            )),
-            Token::Assign | Token::Semicolon | Token::RParen => Err(Error::InfixFn),
+            Token::Ident(..) | Token::Int(..) | Token::LParen | Token::Bool(..) => {
+                Ok(Expr::Prefix(
+                    Box::new(PrefixOp::Call(lhs)),
+                    Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::FnBody)?),
+                ))
+            }
+            t => Err(Error::InfixFn(t.to_string())),
         }
     }
 }
@@ -192,6 +194,19 @@ mod tests {
             ("true;", "true;"),
             ("false;", "false;"),
             ("f x true;", "((f x) true);"),
+            ("-42", "(- 42);"),
+            ("2 * -1", "(2 * (- 1));"),
+            ("-2 * 1", "((- 2) * 1);"),
+            ("2 + -1", "(2 + (- 1));"),
+            ("-2 + 1", "((- 2) + 1);"),
+            ("--2", "(- (- 2));"),
+            ("-(2)", "(- 2);"),
+            ("-f x", "(- (f x));"),
+            ("f - 1", "(f - 1);"),
+            ("f (-1)", "(f (- 1));"),
+            ("-1 * 2 + 3", "(((- 1) * 2) + 3);"),
+            ("1 + -2 * 3", "(1 + ((- 2) * 3));"),
+            ("-(1 + 2) * 3", "((- (1 + 2)) * 3);"),
         ];
 
         for (input, expected) in tests {

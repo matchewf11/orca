@@ -3,7 +3,7 @@ use std::fmt;
 
 type Params = Vec<String>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
     Bool(bool),

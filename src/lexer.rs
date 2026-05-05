@@ -68,6 +68,7 @@ mod tests {
         add_two x = x + 2;
         foo = true;
         bar = false;
+        -1;
         ";
 
         assert_eq!(
@@ -97,6 +98,9 @@ mod tests {
                 Token::Ident(b"bar"),
                 Token::Assign,
                 Token::Bool(false),
+                Token::Semicolon,
+                Token::Minus,
+                Token::Int(1),
                 Token::Semicolon,
             ],
         )

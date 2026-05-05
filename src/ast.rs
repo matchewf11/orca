@@ -17,7 +17,13 @@ pub enum Expr {
     Bool(bool),
     Var(Name),
     Infix(Box<Expr>, InfixOp, Box<Expr>),
-    Call(Box<Expr>, Box<Expr>),
+    Prefix(Box<PrefixOp>, Box<Expr>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum PrefixOp {
+    Call(Expr),
+    Neg,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,7 +66,17 @@ impl fmt::Display for Expr {
             Bool(b) => write!(f, "{b}"),
             Var(s) => write!(f, "{s}"),
             Infix(l, o, r) => write!(f, "({l} {o} {r})"),
-            Call(fun, a) => write!(f, "({fun} {a})"),
+            Prefix(o, a) => write!(f, "({o} {a})"),
+        }
+    }
+}
+
+impl fmt::Display for PrefixOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use PrefixOp::*;
+        match self {
+            Call(e) => write!(f, "{e}"),
+            Neg => write!(f, "-"),
         }
     }
 }
