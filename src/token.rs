@@ -12,6 +12,7 @@ pub enum Token<'a> {
     Semicolon,
     LParen,
     RParen,
+    Bool(bool),
 }
 
 impl fmt::Display for Token<'_> {
@@ -29,6 +30,7 @@ impl fmt::Display for Token<'_> {
             Semicolon => ";",
             LParen => "(",
             RParen => ")",
+            Bool(b) => return write!(f, "{b}")
         };
 
         write!(f, "{s}")
@@ -54,5 +56,15 @@ impl TryFrom<u8> for Token<'static> {
             b'*' => Token::Mult,
             b => return Err(Error::UnknownSymbol),
         })
+    }
+}
+
+impl<'a> Token<'a> {
+    pub fn lookup_keyword(bytes: &'a [u8]) -> Self {
+        match bytes {
+            b"true" => Token::Bool(true),
+            b"false" => Token::Bool(false),
+            _ => Token::Ident(bytes)
+        }
     }
 }

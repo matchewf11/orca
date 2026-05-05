@@ -16,6 +16,7 @@ pub enum Stmt {
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Int(i64),
+    Bool(bool),
     Var(Name),
     Infix(Box<Expr>, InfixOp, Box<Expr>),
     Call(Box<Expr>, Box<Expr>),
@@ -58,6 +59,7 @@ impl fmt::Display for Expr {
         use Expr::*;
         match self {
             Int(i) => write!(f, "{i}"),
+            Bool(b) => write!(f, "{b}"),
             Var(s) => write!(f, "{s}"),
             Infix(l, o, r) => write!(f, "({l} {o} {r})"),
             Call(fun, a) => write!(f, "({fun} {a})"),

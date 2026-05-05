@@ -28,6 +28,7 @@ impl Eval {
     pub fn eval_expr(expr: &Expr) -> Value {
         match expr {
             Expr::Int(n) => Value::Int(*n),
+            Expr::Bool(b) => todo!(),
             Expr::Infix(lhs, op, rhs) => {
                 let lhs = Self::eval_expr(lhs);
                 let rhs = Self::eval_expr(rhs);

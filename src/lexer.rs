@@ -32,7 +32,7 @@ impl<'a> Iterator for Lexer<'a> {
                 self.next()
             }
             c if c.is_ascii_digit() => Some(Ok(Token::Int(self.read_number().unwrap()))),
-            c if c.is_ascii_alphabetic() => Some(Ok(Token::Ident(self.read_ident()))),
+            c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
             &c => {
                 self.0.next();
                 c.try_into().ok().map(Ok)
@@ -50,6 +50,8 @@ mod tests {
         let input = b"
         200-12 * (foo / bar);
         add_two x = x + 2;
+        foo = true;
+        bar = false;
         ";
 
         assert_eq!(
@@ -71,6 +73,14 @@ mod tests {
                 Token::Ident(b"x"),
                 Token::Plus,
                 Token::Int(2),
+                Token::Semicolon,
+                Token::Ident(b"foo"),
+                Token::Assign,
+                Token::Bool(true),
+                Token::Semicolon,
+                Token::Ident(b"bar"),
+                Token::Assign,
+                Token::Bool(false),
                 Token::Semicolon,
             ],
         )

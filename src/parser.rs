@@ -27,7 +27,7 @@ impl Prec {
         match token {
             Token::Plus | Token::Minus => Sum,
             Token::Mult | Token::Div => Product,
-            Token::Ident(_) | Token::Int(_) | Token::LParen => Call,
+            Token::Ident(_) | Token::Int(_) | Token::LParen | Token::Bool(_) => Call,
             _ => Lowest,
         }
     }
@@ -110,6 +110,7 @@ impl<'a> Parser<'a> {
                 }
                 expr
             }
+            Some(Token::Bool(b)) => Ok(Some(Expr::Bool(*b))),
             Some(t) => todo!("prefix {t}"),
         }
     }
@@ -126,7 +127,7 @@ impl<'a> Parser<'a> {
                     Box::new(rhs),
                 ))
             }
-            Token::Ident(..) | Token::Int(..) | Token::LParen => Ok(Expr::Call(
+            Token::Ident(..) | Token::Int(..) | Token::LParen | Token::Bool(..) => Ok(Expr::Call(
                 Box::new(lhs),
                 Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::Infix)?),
             )),
@@ -168,6 +169,9 @@ mod tests {
             ("f (x + y) * 2", "((f (x + y)) * 2);"),
             ("f g x", "((f g) x);"),
             ("((f g) x)", "((f g) x);"),
+            ("true;", "true;"),
+            ("false;", "false;"),
+            ("f x true;", "((f x) true);"),
         ];
 
         for (input, expected) in tests {
