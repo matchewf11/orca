@@ -22,6 +22,8 @@ impl<'a> Lexer<'a> {
 #[derive(Debug)]
 pub enum Error {
     Number(ParseIntError),
+    InvalidByte(u8),
+    Empty,
 }
 
 impl fmt::Display for Error {
@@ -29,6 +31,8 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             Number(e) => write!(f, "failed to parse number: {e}"),
+            InvalidByte(b) => write!(f, "invalid byte: {b}"),
+            Empty => write!(f, "nothing"),
         }
     }
 }
@@ -48,6 +52,27 @@ impl<'a> Iterator for Lexer<'a> {
                     Some(self.read_number().map(Token::Int).map_err(Error::Number))
                 }
                 c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
+                b'!' => {
+                    self.0.next();
+                    match self.0.peek() {
+                        Some(b'=') => {
+                            self.0.next();
+                            Some(Ok(Token::NEq))
+                        },
+                        _ => {
+                            Some(Ok(Token::Not))
+                        }
+                    }
+                }
+                b'=' => {
+                    self.0.next();
+                    if self.0.peek() == Some(&b'=') {
+                        self.0.next();
+                        Some(Ok(Token::Eq))
+                    } else {
+                        Some(Ok(Token::Assign))
+                    }
+                }
                 &c => {
                     self.0.next();
                     c.try_into().ok().map(Ok)
@@ -69,6 +94,11 @@ mod tests {
         foo = true;
         bar = false;
         -1;
+        1 == 1;
+        1 != 1;
+        !true;
+        1 % 1;
+        1 > 1;
         ";
 
         assert_eq!(
@@ -100,6 +130,25 @@ mod tests {
                 Token::Bool(false),
                 Token::Semicolon,
                 Token::Minus,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Eq,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::NEq,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Not,
+                Token::Bool(true),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Mod,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Gt,
                 Token::Int(1),
                 Token::Semicolon,
             ],

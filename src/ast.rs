@@ -24,6 +24,7 @@ pub enum Expr {
 pub enum PrefixOp {
     Call(Expr),
     Neg,
+    Not,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -32,6 +33,10 @@ pub enum InfixOp {
     Sub,
     Mul,
     Div,
+    Eq,
+    NEq,
+    Mod,
+    Gt,
 }
 
 #[derive(Debug)]
@@ -47,6 +52,10 @@ impl TryFrom<&Token<'_>> for InfixOp {
             Token::Minus => InfixOp::Sub,
             Token::Mult => InfixOp::Mul,
             Token::Div => InfixOp::Div,
+            Token::Eq => InfixOp::Eq,
+            Token::NEq => InfixOp::NEq,
+            Token::Mod => InfixOp::Mod,
+            Token::Gt => InfixOp::Gt,
             _ => return Err(Error::InvalidToken),
         })
     }
@@ -77,6 +86,7 @@ impl fmt::Display for PrefixOp {
         match self {
             Call(e) => write!(f, "{e}"),
             Neg => write!(f, "-"),
+            Not => write!(f, "!"),
         }
     }
 }
@@ -89,6 +99,10 @@ impl fmt::Display for InfixOp {
             Sub => "-",
             Mul => "*",
             Div => "/",
+            Eq => "==",
+            NEq => "!=",
+            Mod => "%",
+            Gt => ">",
         };
         write!(f, "{s}")
     }

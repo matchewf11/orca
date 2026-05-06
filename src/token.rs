@@ -6,6 +6,8 @@ pub enum Token<'a> {
     Int(i64),
     Bool(bool),
     Assign,
+    Eq,
+    NEq,
     Plus,
     Minus,
     Mult,
@@ -13,6 +15,9 @@ pub enum Token<'a> {
     Semicolon,
     LParen,
     RParen,
+    Not,
+    Mod,
+    Gt,
 }
 
 impl fmt::Display for Token<'_> {
@@ -30,6 +35,11 @@ impl fmt::Display for Token<'_> {
             Semicolon => ";",
             LParen => "(",
             RParen => ")",
+            Eq => "==",
+            NEq => "!=",
+            Not => "!",
+            Mod => "%",
+            Gt => ">",
         };
         write!(f, "{s}")
     }
@@ -50,6 +60,9 @@ impl TryFrom<u8> for Token<'static> {
             b';' => Token::Semicolon,
             b'-' => Token::Minus,
             b'*' => Token::Mult,
+            b'!' => Token::Not,
+            b'%' => Token::Mod,
+            b'>' => Token::Gt,
             _ => return Err(UknownSymbolError),
         })
     }

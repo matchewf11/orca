@@ -43,14 +43,24 @@ impl Eval {
                 let lhs = Self::eval_expr(lhs)?;
                 let rhs = Self::eval_expr(rhs)?;
                 match (lhs, op, rhs) {
+                    (Value::Int(n), InfixOp::Gt, Value::Int(m)) => Ok(Value::Bool(n > m)),
+                    (_, InfixOp::Gt, _) => Err(Error::InvalidType),
                     (Value::Int(n), InfixOp::Add, Value::Int(m)) => Ok(Value::Int(n + m)),
-                    (Value::Int(n), InfixOp::Sub, Value::Int(m)) => Ok(Value::Int(n - m)),
-                    (Value::Int(n), InfixOp::Mul, Value::Int(m)) => Ok(Value::Int(n * m)),
-                    (Value::Int(n), InfixOp::Div, Value::Int(m)) => Ok(Value::Int(n / m)),
                     (_, InfixOp::Add, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::Sub, Value::Int(m)) => Ok(Value::Int(n - m)),
                     (_, InfixOp::Sub, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::Mul, Value::Int(m)) => Ok(Value::Int(n * m)),
                     (_, InfixOp::Mul, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::Div, Value::Int(m)) => Ok(Value::Int(n / m)),
                     (_, InfixOp::Div, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::Mod, Value::Int(m)) => Ok(Value::Int(n % m)),
+                    (_, InfixOp::Mod, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::Eq, Value::Int(m)) => Ok(Value::Bool(n == m)),
+                    (Value::Bool(n), InfixOp::Eq, Value::Bool(m)) => Ok(Value::Bool(n == m)),
+                    (_, InfixOp::Eq, _) => Err(Error::InvalidType),
+                    (Value::Int(n), InfixOp::NEq, Value::Int(m)) => Ok(Value::Bool(n != m)),
+                    (Value::Bool(n), InfixOp::NEq, Value::Bool(m)) => Ok(Value::Bool(n != m)),
+                    (_, InfixOp::NEq, _) => Err(Error::InvalidType),
                 }
             }
             Prefix(op, arg) => {
@@ -60,6 +70,8 @@ impl Eval {
                 match (op.as_ref(), arg) {
                     (Neg, Value::Int(n)) => Ok(Value::Int(-n)),
                     (Neg, _) => Err(Error::InvalidType),
+                    (Not, Value::Bool(n)) => Ok(Value::Bool(!n)),
+                    (Not, _) => Err(Error::InvalidType),
                     (Call(..), _) => todo!("dont handle env right now"),
                 }
             }
@@ -95,18 +107,22 @@ mod tests {
             ("--1", Some(Value::Int(1))),
             ("-(1 + 1)", Some(Value::Int(-2))),
 
-            // ("1 == 1", Some(Value::Bool(true))),
-            // ("1 == 2", Some(Value::Bool(false))),
-            // ("1 != 1", Some(Value::Bool(false))),
-            // ("1 != 2", Some(Value::Bool(true))),
-            // ("true == true", Some(Value::Bool(true))),
-            // ("true == false", Some(Value::Bool(false))),
-            // ("true != true", Some(Value::Bool(false))),
-            // ("true != false", Some(Value::Bool(true))),
-            // ("!(1 == 1)", Some(Value::Bool(false))),
-            // ("!(1 != 1)", Some(Value::Bool(false))),
-            // ("!!(1 != 1)", Some(Value::Bool(true))),
-            // ("3 % 2", Some(Value::Int(1))),
+            ("1 == 1", Some(Value::Bool(true))),
+            ("1 == 2", Some(Value::Bool(false))),
+            ("1 != 1", Some(Value::Bool(false))),
+            ("1 != 2", Some(Value::Bool(true))),
+            ("true == true", Some(Value::Bool(true))),
+            ("true == false", Some(Value::Bool(false))),
+            ("true != true", Some(Value::Bool(false))),
+            ("true != false", Some(Value::Bool(true))),
+            ("!(1 == 1)", Some(Value::Bool(false))),
+            ("!(1 != 1)", Some(Value::Bool(true))),
+            ("!!(1 != 1)", Some(Value::Bool(false))),
+            ("3 % 2", Some(Value::Int(1))),
+
+            ("3 > 2", Some(Value::Bool(true))),
+            ("3 > 3", Some(Value::Bool(false))),
+
             // >, <, >=, <=
             // &&, ||
             // **

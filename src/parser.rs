@@ -35,6 +35,8 @@ impl fmt::Display for Error {
 #[derive(PartialOrd, PartialEq)]
 enum Prec {
     Lowest,
+    Equality,
+    Relational,
     Sum,
     Product,
     Prefix,
@@ -46,9 +48,12 @@ impl Prec {
         use Prec::*;
         use Token::*;
         match token {
+            Gt => Relational,
             Semicolon | RParen | Assign => Lowest,
+            Not => Prefix,
+            Eq | NEq => Equality,
             Plus | Minus => Sum,
-            Mult | Div => Product,
+            Mod | Mult | Div => Product,
             Ident(_) | Int(_) | LParen | Bool(_) => Call,
         }
     }
@@ -130,13 +135,16 @@ impl<'a> Parser<'a> {
             Some(Token::Minus) => Ok(self
                 .parse_expr(Prec::Prefix)?
                 .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr)))),
+            Some(Token::Not) => Ok(self
+                .parse_expr(Prec::Prefix)?
+                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Not), Box::new(expr)))),
             Some(t) => Err(Error::PrefixFn(t.to_string())),
         }
     }
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
         match self.0.peek().unwrap() {
-            Token::Plus | Token::Minus | Token::Div | Token::Mult => {
+            Token::Gt | Token::Mod | Token::Plus | Token::Minus | Token::Div | Token::Mult | Token::Eq | Token::NEq => {
                 let op = self.0.next().unwrap();
                 let rhs = self
                     .parse_expr(Prec::token_prec(op))?
@@ -207,6 +215,13 @@ mod tests {
             ("-1 * 2 + 3", "(((- 1) * 2) + 3);"),
             ("1 + -2 * 3", "(1 + ((- 2) * 3));"),
             ("-(1 + 2) * 3", "((- (1 + 2)) * 3);"),
+            ("f + 1 == x + 1", "((f + 1) == (x + 1));"),
+            ("f + 1 != x + 1", "((f + 1) != (x + 1));"),
+            ("!!true", "(! (! true));"),
+            ("!true == !true", "((! true) == (! true));"),
+            ("2 % -1", "(2 % (- 1));"),
+            ("2 % 2 * 2", "((2 % 2) * 2);"),
+            ("foo == 2 > -1 + 1", "(foo == (2 > ((- 1) + 1)));"),
         ];
 
         for (input, expected) in tests {
