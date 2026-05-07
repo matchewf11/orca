@@ -1,4 +1,7 @@
-use crate::{cursor::Cursor, token::Token};
+use crate::{
+    cursor::Cursor,
+    token::{Token, UnknownSymbolError},
+};
 use std::{fmt, num::ParseIntError};
 
 pub struct Lexer<'a>(Cursor<'a, u8>);
@@ -22,8 +25,8 @@ impl<'a> Lexer<'a> {
 #[derive(Debug)]
 pub enum Error {
     Number(ParseIntError),
-    InvalidByte(u8),
-    Empty,
+    UnknownSymbol(UnknownSymbolError),
+    NotCompletedSymbol,
 }
 
 impl fmt::Display for Error {
@@ -31,8 +34,8 @@ impl fmt::Display for Error {
         use Error::*;
         match self {
             Number(e) => write!(f, "failed to parse number: {e}"),
-            InvalidByte(b) => write!(f, "invalid byte: {b}"),
-            Empty => write!(f, "nothing"),
+            UnknownSymbol(b) => write!(f, "unknown byte: {b:?}"),
+            NotCompletedSymbol => write!(f, "no symbol"),
         }
     }
 }
@@ -52,16 +55,32 @@ impl<'a> Iterator for Lexer<'a> {
                     Some(self.read_number().map(Token::Int).map_err(Error::Number))
                 }
                 c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
+
+                b'&' => {
+                    self.0.next();
+                    Some(if self.0.next() == Some(&b'&') {
+                        Ok(Token::And)
+                    } else {
+                        Err(Error::NotCompletedSymbol)
+                    })
+                }
+                b'|' => {
+                    self.0.next();
+                    Some(if self.0.next() == Some(&b'|') {
+                        Ok(Token::Or)
+                    } else {
+                        Err(Error::NotCompletedSymbol)
+                    })
+                }
+
                 b'!' => {
                     self.0.next();
                     match self.0.peek() {
                         Some(b'=') => {
                             self.0.next();
                             Some(Ok(Token::NEq))
-                        },
-                        _ => {
-                            Some(Ok(Token::Not))
                         }
+                        _ => Some(Ok(Token::Not)),
                     }
                 }
                 b'=' => {
@@ -73,9 +92,41 @@ impl<'a> Iterator for Lexer<'a> {
                         Some(Ok(Token::Assign))
                     }
                 }
+                b'*' => {
+                    self.0.next();
+                    if self.0.peek() == Some(&b'*') {
+                        self.0.next();
+                        Some(Ok(Token::Exp))
+                    } else {
+                        Some(Ok(Token::Mult))
+                    }
+                }
+                b'<' => {
+                    self.0.next();
+                    Some(Ok(match self.0.peek() {
+                        Some(b'=') => {
+                            self.0.next();
+                            Token::Lte
+                        }
+                        _ => Token::Lt,
+                    }))
+                }
+                b'>' => {
+                    self.0.next();
+                    Some(Ok(match self.0.peek() {
+                        Some(b'=') => {
+                            self.0.next();
+                            Token::Gte
+                        }
+                        _ => Token::Gt,
+                    }))
+                }
                 &c => {
                     self.0.next();
-                    c.try_into().ok().map(Ok)
+                    Some(match c.try_into() {
+                        Ok(c) => Ok(c),
+                        Err(c) => Err(Error::UnknownSymbol(c)),
+                    })
                 }
             },
         }
@@ -99,6 +150,12 @@ mod tests {
         !true;
         1 % 1;
         1 > 1;
+        1 < 1;
+        1 <= 1;
+        1 >= 1;
+        1 || 1;
+        1 && 1;
+        1 ** 1;
         ";
 
         assert_eq!(
@@ -149,6 +206,30 @@ mod tests {
                 Token::Semicolon,
                 Token::Int(1),
                 Token::Gt,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Lt,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Lte,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Gte,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Or,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::And,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Int(1),
+                Token::Exp,
                 Token::Int(1),
                 Token::Semicolon,
             ],

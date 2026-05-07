@@ -2,13 +2,12 @@ use crate::token::Token;
 use std::fmt;
 
 pub type Program = Vec<Stmt>;
-type Args = Vec<String>;
 type Name = String;
 
 #[derive(Debug, PartialEq)]
 pub enum Stmt {
-    Bind(Name, Args, Expr),
     Expr(Expr),
+    Bind(Name, Expr),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -18,6 +17,7 @@ pub enum Expr {
     Var(Name),
     Infix(Box<Expr>, InfixOp, Box<Expr>),
     Prefix(Box<PrefixOp>, Box<Expr>),
+    If(Box<Expr>, Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -37,6 +37,12 @@ pub enum InfixOp {
     NEq,
     Mod,
     Gt,
+    Lt,
+    Gte,
+    Lte,
+    And,
+    Or,
+    Exp,
 }
 
 #[derive(Debug)]
@@ -56,6 +62,12 @@ impl TryFrom<&Token<'_>> for InfixOp {
             Token::NEq => InfixOp::NEq,
             Token::Mod => InfixOp::Mod,
             Token::Gt => InfixOp::Gt,
+            Token::Lt => InfixOp::Lt,
+            Token::Gte => InfixOp::Gte,
+            Token::Lte => InfixOp::Lte,
+            Token::And => InfixOp::And,
+            Token::Or => InfixOp::Or,
+            Token::Exp => InfixOp::Exp,
             _ => return Err(Error::InvalidToken),
         })
     }
@@ -76,6 +88,7 @@ impl fmt::Display for Expr {
             Var(s) => write!(f, "{s}"),
             Infix(l, o, r) => write!(f, "({l} {o} {r})"),
             Prefix(o, a) => write!(f, "({o} {a})"),
+            If(c, a, b) => write!(f, "if {c} then {a} else {b}"),
         }
     }
 }
@@ -103,6 +116,12 @@ impl fmt::Display for InfixOp {
             NEq => "!=",
             Mod => "%",
             Gt => ">",
+            Lt => "<",
+            Gte => ">=",
+            Lte => "<=",
+            And => "&&",
+            Or => "||",
+            Exp => "**",
         };
         write!(f, "{s}")
     }
@@ -113,7 +132,7 @@ impl fmt::Display for Stmt {
         use Stmt::*;
         match self {
             Expr(e) => write!(f, "{e};"),
-            Bind(n, a, b) => write!(f, "{n} [{}] = {b}", a.join(",")),
+            Bind(n, e) => write!(f, "{n} = {e}"),
         }
     }
 }

@@ -14,7 +14,6 @@ pub enum Error {
     FnBody,
     ClosingParen,
     InfixRhs,
-    PrefixRhs,
 }
 
 impl fmt::Display for Error {
@@ -26,7 +25,6 @@ impl fmt::Display for Error {
             FnBody => "function has no body",
             ClosingParen => "parenthesis are not closed",
             InfixRhs => "no rhs to the infix",
-            PrefixRhs => "no rhs to the prefix",
         };
         write!(f, "{s}")
     }
@@ -35,10 +33,13 @@ impl fmt::Display for Error {
 #[derive(PartialOrd, PartialEq)]
 enum Prec {
     Lowest,
+    Or,
+    And,
     Equality,
     Relational,
     Sum,
     Product,
+    Exponent,
     Prefix,
     Call,
 }
@@ -48,8 +49,11 @@ impl Prec {
         use Prec::*;
         use Token::*;
         match token {
-            Gt => Relational,
-            Semicolon | RParen | Assign => Lowest,
+            Exp => Exponent,
+            Token::And => Prec::And,
+            Token::Or => Prec::Or,
+            Lte | Gte | Lt | Gt => Relational,
+            If | Then | Else | Semicolon | RParen | Assign => Lowest,
             Not => Prefix,
             Eq | NEq => Equality,
             Plus | Minus => Sum,
@@ -73,8 +77,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_stmt(&mut self) -> Result<Option<Stmt>, Error> {
-        let stmt = if let Some((n, a, e)) = self.parse_bind()? {
-            Some(Stmt::Bind(n, a, e))
+        let stmt = if let Some((n, e)) = self.parse_bind()? {
+            Some(Stmt::Bind(n, e))
         } else {
             self.parse_expr(Prec::Lowest)?.map(Into::into)
         };
@@ -87,21 +91,17 @@ impl<'a> Parser<'a> {
         Ok(stmt)
     }
 
-    fn parse_bind(&mut self) -> Result<Option<(String, Vec<String>, Expr)>, Error> {
-        let idents = self.0.peek_while_map(|i| match i {
-            Token::Ident(i) => Some(str::from_utf8(i).unwrap().to_string()),
-            _ => None,
-        });
-
-        if idents.is_empty() || self.0.peek_n(idents.len()) != Some(&Token::Assign) {
+    fn parse_bind(&mut self) -> Result<Option<(String, Expr)>, Error> {
+        let name = match self.0.peek() {
+            Some(Token::Ident(t)) => t,
+            _ => return Ok(None),
+        };
+        if self.0.peek_n(1) != Some(&Token::Assign) {
             return Ok(None);
         }
-
-        // plus 1 for the assign token
-        self.0.eat_n(idents.len() + 1);
-
+        self.0.eat_n(2);
         let expr = self.parse_expr(Prec::Lowest)?.ok_or(Error::FnBody)?;
-        Ok(Some((idents[0].clone(), idents[1..].to_vec(), expr)))
+        Ok(Some((str::from_utf8(name).unwrap().to_string(), expr)))
     }
 
     fn parse_expr(&mut self, prec: Prec) -> Result<Option<Expr>, Error> {
@@ -132,6 +132,18 @@ impl<'a> Parser<'a> {
                 }
                 expr
             }
+            Some(Token::If) => {
+                let cond = self.parse_expr(Prec::Lowest)?.unwrap();
+                if self.0.next() != Some(&Token::Then) {
+                    return Err(Error::ClosingParen);
+                }
+                let a = self.parse_expr(Prec::Lowest)?.unwrap();
+                if self.0.next() != Some(&Token::Else) {
+                    return Err(Error::ClosingParen);
+                }
+                let b = self.parse_expr(Prec::Lowest)?.unwrap();
+                Ok(Some(Expr::If(Box::new(cond), Box::new(a), Box::new(b))))
+            }
             Some(Token::Minus) => Ok(self
                 .parse_expr(Prec::Prefix)?
                 .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr)))),
@@ -144,7 +156,20 @@ impl<'a> Parser<'a> {
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
         match self.0.peek().unwrap() {
-            Token::Gt | Token::Mod | Token::Plus | Token::Minus | Token::Div | Token::Mult | Token::Eq | Token::NEq => {
+            Token::Lte
+            | Token::Gte
+            | Token::Lt
+            | Token::Exp
+            | Token::Gt
+            | Token::Mod
+            | Token::Plus
+            | Token::Minus
+            | Token::Div
+            | Token::And
+            | Token::Or
+            | Token::Mult
+            | Token::Eq
+            | Token::NEq => {
                 let op = self.0.next().unwrap();
                 let rhs = self
                     .parse_expr(Prec::token_prec(op))?
@@ -222,6 +247,17 @@ mod tests {
             ("2 % -1", "(2 % (- 1));"),
             ("2 % 2 * 2", "((2 % 2) * 2);"),
             ("foo == 2 > -1 + 1", "(foo == (2 > ((- 1) + 1)));"),
+            ("foo == 2 < -1 + 1", "(foo == (2 < ((- 1) + 1)));"),
+            ("2 < x > 2", "((2 < x) > 2);"),
+            ("2 > x < 2", "((2 > x) < 2);"),
+            ("2 < x >= 2", "((2 < x) >= 2);"),
+            ("2 >= x < 2", "((2 >= x) < 2);"),
+            ("2 < x <= 2", "((2 < x) <= 2);"),
+            ("2 <= x < 2", "((2 <= x) < 2);"),
+            ("true && false || true", "((true && false) || true);"),
+            ("true && 2 == 1", "(true && (2 == 1));"),
+            ("2 ** -2", "(2 ** (- 2));"),
+            ("2 ** 2 * 2", "((2 ** 2) * 2);"),
         ];
 
         for (input, expected) in tests {
@@ -235,29 +271,19 @@ mod tests {
     }
 
     #[test]
-    fn test_parse() {
-        let input = "x + y ; add x y = x + y;";
+    fn test_parse_bind() {
+        let input = "x = 1 + 1";
         let lexer = Lexer::new(input.as_bytes())
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
+        let parser = Parser::new(&lexer).parse_program().unwrap();
+        assert_eq!(parser.len(), 1);
         assert_eq!(
-            Parser::new(&lexer).parse_program().unwrap(),
-            vec![
-                Stmt::Expr(Expr::Infix(
-                    Box::new(Expr::Var("x".to_string())),
-                    InfixOp::Add,
-                    Box::new(Expr::Var("y".to_string())),
-                )),
-                Stmt::Bind(
-                    "add".to_string(),
-                    vec!["x".to_string(), "y".to_string()],
-                    Expr::Infix(
-                        Box::new(Expr::Var("x".to_string())),
-                        InfixOp::Add,
-                        Box::new(Expr::Var("y".to_string())),
-                    )
-                ),
-            ],
+            parser[0],
+            Stmt::Bind(
+                "x".to_string(),
+                Expr::Infix(Box::new(Expr::Int(1)), InfixOp::Add, Box::new(Expr::Int(1)),)
+            )
         );
     }
 }

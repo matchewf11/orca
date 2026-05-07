@@ -12,10 +12,12 @@ impl<'a, T> Cursor<'a, T> {
         self.input.get(self.pos)
     }
 
+    #[allow(dead_code)]
     pub fn peek_n(&self, n: usize) -> Option<&'a T> {
         self.input.get(self.pos + n)
     }
 
+    #[allow(dead_code)]
     pub fn eat_n(&mut self, n: usize) {
         self.pos += n;
     }
@@ -46,6 +48,7 @@ impl<'a, T> Cursor<'a, T> {
         &self.input[start..end]
     }
 
+    #[allow(dead_code)]
     pub fn peek_while_map<F, M>(&mut self, mut f: F) -> Vec<M>
     where
         F: FnMut(&T) -> Option<M>,

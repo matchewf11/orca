@@ -18,6 +18,15 @@ pub enum Token<'a> {
     Not,
     Mod,
     Gt,
+    Lt,
+    Lte,
+    Gte,
+    And,
+    Or,
+    Exp,
+    If,
+    Then,
+    Else,
 }
 
 impl fmt::Display for Token<'_> {
@@ -40,15 +49,25 @@ impl fmt::Display for Token<'_> {
             Not => "!",
             Mod => "%",
             Gt => ">",
+            Lt => ">",
+            Gte => ">=",
+            Lte => "<=",
+            And => "&&",
+            Or => "||",
+            Exp => "**",
+            If => "if",
+            Then => "then",
+            Else => "else",
         };
         write!(f, "{s}")
     }
 }
 
-pub struct UknownSymbolError;
+#[derive(Debug)]
+pub struct UnknownSymbolError;
 
 impl TryFrom<u8> for Token<'static> {
-    type Error = UknownSymbolError;
+    type Error = UnknownSymbolError;
 
     fn try_from(c: u8) -> Result<Self, Self::Error> {
         Ok(match c {
@@ -63,7 +82,8 @@ impl TryFrom<u8> for Token<'static> {
             b'!' => Token::Not,
             b'%' => Token::Mod,
             b'>' => Token::Gt,
-            _ => return Err(UknownSymbolError),
+            b'<' => Token::Lt,
+            _ => return Err(UnknownSymbolError),
         })
     }
 }
@@ -73,6 +93,9 @@ impl<'a> Token<'a> {
         match bytes {
             b"true" => Token::Bool(true),
             b"false" => Token::Bool(false),
+            b"if" => Token::If,
+            b"then" => Token::Then,
+            b"else" => Token::Else,
             _ => Token::Ident(bytes),
         }
     }
