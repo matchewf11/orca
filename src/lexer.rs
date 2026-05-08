@@ -1,7 +1,4 @@
-use crate::{
-    cursor::Cursor,
-    token::{Token, UnknownSymbolError},
-};
+use crate::{cursor::Cursor, token::Token};
 use std::{fmt, num::ParseIntError};
 
 pub struct Lexer<'a>(Cursor<'a, u8>);
@@ -9,6 +6,43 @@ pub struct Lexer<'a>(Cursor<'a, u8>);
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a [u8]) -> Self {
         Lexer(Cursor::new(input))
+    }
+
+    fn lookup_token(&mut self) -> Option<Token<'static>> {
+        let matches = [
+            ("false", Token::Bool(false)),
+            ("true", Token::Bool(true)),
+            ("then", Token::Then),
+            ("else", Token::Else),
+            ("if", Token::If),
+            ("||", Token::Or),
+            ("&&", Token::And),
+            ("<=", Token::Lte),
+            (">=", Token::Gte),
+            ("!=", Token::NEq),
+            ("=>", Token::Arrow),
+            ("**", Token::Exp),
+            (">", Token::Gt),
+            ("<", Token::Lt),
+            ("+", Token::Plus),
+            ("-", Token::Minus),
+            ("=", Token::Assign),
+            (";", Token::Semicolon),
+            ("*", Token::Mult),
+            ("(", Token::LParen),
+            (")", Token::RParen),
+            ("/", Token::Div),
+            ("!", Token::Not),
+            ("%", Token::Mod),
+            ("==", Token::Eq),
+        ]
+        .into_iter()
+        .filter(|(ident, _)| self.0.is_prefix(ident.as_bytes()));
+
+        matches.max_by_key(|(i, _)| i.len()).map(|(i, v)| {
+            self.0.eat_n(i.len());
+            v
+        })
     }
 
     fn read_number(&mut self) -> Result<i64, ParseIntError> {
@@ -23,114 +57,33 @@ impl<'a> Lexer<'a> {
 }
 
 #[derive(Debug)]
-pub enum Error {
-    Number(ParseIntError),
-    UnknownSymbol(UnknownSymbolError),
-    NotCompletedSymbol,
-}
+pub struct Error(u8);
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
-        match self {
-            Number(e) => write!(f, "failed to parse number: {e}"),
-            UnknownSymbol(b) => write!(f, "unknown byte: {b:?}"),
-            NotCompletedSymbol => write!(f, "no symbol"),
-        }
+        write!(f, "Could not find anything for token: {}", self.0)
     }
 }
 
 impl<'a> Iterator for Lexer<'a> {
     type Item = Result<Token<'a>, Error>;
-
     fn next(&mut self) -> Option<Self::Item> {
-        match self.0.peek() {
-            None => None,
-            Some(c) => match c {
-                b' ' | b'\n' => {
-                    self.0.next();
-                    self.next()
-                }
-                c if c.is_ascii_digit() => {
-                    Some(self.read_number().map(Token::Int).map_err(Error::Number))
-                }
-                c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
-                b'&' => {
-                    self.0.next();
-                    Some(if self.0.next() == Some(&b'&') {
-                        Ok(Token::And)
-                    } else {
-                        Err(Error::NotCompletedSymbol)
-                    })
-                }
-                b'|' => {
-                    self.0.next();
-                    Some(if self.0.next() == Some(&b'|') {
-                        Ok(Token::Or)
-                    } else {
-                        Err(Error::NotCompletedSymbol)
-                    })
-                }
+        if let Some(val) = self.lookup_token() {
+            return Some(Ok(val));
+        }
 
-                b'!' => {
-                    self.0.next();
-                    match self.0.peek() {
-                        Some(b'=') => {
-                            self.0.next();
-                            Some(Ok(Token::NEq))
-                        }
-                        _ => Some(Ok(Token::Not)),
-                    }
-                }
-                b'=' => {
-                    self.0.next();
-                    if self.0.peek() == Some(&b'=') {
-                        self.0.next();
-                        Some(Ok(Token::Eq))
-                    } else if self.0.peek() == Some(&b'>') {
-                        self.0.next();
-                        Some(Ok(Token::Arrow))
-                    } else {
-                        Some(Ok(Token::Assign))
-                    }
-                }
-                b'*' => {
-                    self.0.next();
-                    if self.0.peek() == Some(&b'*') {
-                        self.0.next();
-                        Some(Ok(Token::Exp))
-                    } else {
-                        Some(Ok(Token::Mult))
-                    }
-                }
-                b'<' => {
-                    self.0.next();
-                    Some(Ok(match self.0.peek() {
-                        Some(b'=') => {
-                            self.0.next();
-                            Token::Lte
-                        }
-                        _ => Token::Lt,
-                    }))
-                }
-                b'>' => {
-                    self.0.next();
-                    Some(Ok(match self.0.peek() {
-                        Some(b'=') => {
-                            self.0.next();
-                            Token::Gte
-                        }
-                        _ => Token::Gt,
-                    }))
-                }
-                &c => {
-                    self.0.next();
-                    Some(match c.try_into() {
-                        Ok(c) => Ok(c),
-                        Err(c) => Err(Error::UnknownSymbol(c)),
-                    })
-                }
-            },
+        match self.0.peek()? {
+            b' ' | b'\n' => {
+                self.0.next();
+                self.next()
+            }
+            b'#' => {
+                while &b'\n' != self.0.next()? {}
+                self.next()
+            }
+            c if c.is_ascii_digit() => Some(Ok(self.read_number().map(Token::Int).unwrap())),
+            c if c.is_ascii_alphabetic() => Some(Ok(Token::Ident(self.read_ident()))),
+            c => Some(Err(Error(*c))),
         }
     }
 }
@@ -142,6 +95,7 @@ mod tests {
     #[test]
     fn test_lexer() {
         let input = b"
+        # foo
         200-12 * (foo / bar);
         add_two x = x + 2;
         foo = true;

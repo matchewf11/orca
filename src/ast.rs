@@ -47,13 +47,12 @@ pub enum InfixOp {
 }
 
 #[derive(Debug)]
-pub enum Error {
-    InvalidToken,
-}
+pub struct Error<'a>(&'a Token<'a>);
 
-impl TryFrom<&Token<'_>> for InfixOp {
-    type Error = Error;
-    fn try_from(t: &Token<'_>) -> Result<Self, Self::Error> {
+impl<'a> TryFrom<&'a Token<'a>> for InfixOp {
+    type Error = Error<'a>;
+
+    fn try_from(t: &'a Token) -> Result<Self, Self::Error> {
         Ok(match t {
             Token::Plus => InfixOp::Add,
             Token::Minus => InfixOp::Sub,
@@ -70,7 +69,7 @@ impl TryFrom<&Token<'_>> for InfixOp {
             Token::Or => InfixOp::Or,
             Token::Arrow => InfixOp::Arrow,
             Token::Exp => InfixOp::Exp,
-            _ => return Err(Error::InvalidToken),
+            t => return Err(Error(t)),
         })
     }
 }
@@ -135,7 +134,7 @@ impl fmt::Display for Stmt {
         use Stmt::*;
         match self {
             Expr(e) => write!(f, "{e};"),
-            Bind(n, e) => write!(f, "{n} = {e}"),
+            Bind(n, e) => write!(f, "{n} = {e};"),
         }
     }
 }

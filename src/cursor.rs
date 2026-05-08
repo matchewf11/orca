@@ -3,6 +3,19 @@ pub struct Cursor<'a, T> {
     pos: usize,
 }
 
+impl<'a, T: PartialEq> Cursor<'a, T> {
+    pub fn is_prefix(&self, prefix: &[T]) -> bool {
+        self.input.get(self.pos..self.pos + prefix.len()) == Some(prefix)
+    }
+
+    pub fn expect_or<E>(&mut self, v: &T, e: E) -> Result<(), E> {
+        match self.next() {
+            Some(e) if e == v => Ok(()),
+            _ => Err(e),
+        }
+    }
+}
+
 impl<'a, T> Cursor<'a, T> {
     pub fn new(input: &'a [T]) -> Self {
         Self { input, pos: 0 }
@@ -12,12 +25,10 @@ impl<'a, T> Cursor<'a, T> {
         self.input.get(self.pos)
     }
 
-    #[allow(dead_code)]
     pub fn peek_n(&self, n: usize) -> Option<&'a T> {
         self.input.get(self.pos + n)
     }
 
-    #[allow(dead_code)]
     pub fn eat_n(&mut self, n: usize) {
         self.pos += n;
     }
@@ -32,34 +43,6 @@ impl<'a, T> Cursor<'a, T> {
             .take_while(|item| f(item))
             .count();
         &self.input[start..self.pos]
-    }
-
-    #[allow(dead_code)]
-    pub fn peek_while<F>(&mut self, mut f: F) -> &'a [T]
-    where
-        F: FnMut(&T) -> bool,
-    {
-        let start = self.pos;
-        let end = self.pos
-            + self.input[self.pos..]
-                .iter()
-                .take_while(|item| f(item))
-                .count();
-        &self.input[start..end]
-    }
-
-    #[allow(dead_code)]
-    pub fn peek_while_map<F, M>(&mut self, mut f: F) -> Vec<M>
-    where
-        F: FnMut(&T) -> Option<M>,
-    {
-        let start = self.pos;
-        let end = self.pos
-            + self.input[self.pos..]
-                .iter()
-                .take_while(|item| f(item).is_some())
-                .count();
-        self.input[start..end].iter().filter_map(f).collect()
     }
 }
 

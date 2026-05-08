@@ -28,6 +28,9 @@ pub enum Token<'a> {
     Then,
     Else,
     Arrow,
+    // .
+    // $
+    // |>
 }
 
 impl fmt::Display for Token<'_> {
@@ -62,43 +65,5 @@ impl fmt::Display for Token<'_> {
             Arrow => "=>",
         };
         write!(f, "{s}")
-    }
-}
-
-#[derive(Debug)]
-pub struct UnknownSymbolError;
-
-impl TryFrom<u8> for Token<'static> {
-    type Error = UnknownSymbolError;
-
-    fn try_from(c: u8) -> Result<Self, Self::Error> {
-        Ok(match c {
-            b'(' => Token::LParen,
-            b'/' => Token::Div,
-            b')' => Token::RParen,
-            b'=' => Token::Assign,
-            b'+' => Token::Plus,
-            b';' => Token::Semicolon,
-            b'-' => Token::Minus,
-            b'*' => Token::Mult,
-            b'!' => Token::Not,
-            b'%' => Token::Mod,
-            b'>' => Token::Gt,
-            b'<' => Token::Lt,
-            _ => return Err(UnknownSymbolError),
-        })
-    }
-}
-
-impl<'a> Token<'a> {
-    pub fn lookup_keyword(bytes: &'a [u8]) -> Self {
-        match bytes {
-            b"true" => Token::Bool(true),
-            b"false" => Token::Bool(false),
-            b"if" => Token::If,
-            b"then" => Token::Then,
-            b"else" => Token::Else,
-            _ => Token::Ident(bytes),
-        }
     }
 }

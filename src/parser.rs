@@ -65,6 +65,7 @@ impl Prec {
     }
 }
 
+// TODO: add back the add x y = x + y syntax
 impl<'a> Parser<'a> {
     pub fn new(input: &'a [Token<'a>]) -> Self {
         Parser(Cursor::new(input))
@@ -114,13 +115,10 @@ impl<'a> Parser<'a> {
 
         // handle right associativity better
         while let Some(tok) = self.0.peek()
-            && if
-                !matches!(tok, Token::Exp)
-                && !matches!(tok, Token::Arrow)
-            {
-                prec < Prec::token_prec(tok)
-            } else {
+            && if Self::is_right_assoc(tok) {
                 prec <= Prec::token_prec(tok)
+            } else {
+                prec < Prec::token_prec(tok)
             }
         {
             lhs = self.parse_infix(lhs)?;
@@ -129,39 +127,43 @@ impl<'a> Parser<'a> {
         Ok(Some(lhs))
     }
 
-    fn parse_prefix(&mut self) -> Result<Option<Expr>, Error> {
-        match self.0.next() {
-            None => Ok(None),
-            Some(Token::Int(i)) => Ok(Some(Expr::Int(*i))),
-            Some(Token::Ident(i)) => Ok(Some(Expr::Var(str::from_utf8(i).unwrap().to_string()))),
-            Some(Token::Bool(b)) => Ok(Some(Expr::Bool(*b))),
-            Some(Token::LParen) => {
-                let expr = self.parse_expr(Prec::Lowest);
-                if self.0.next() != Some(&Token::RParen) {
-                    return Err(Error::ClosingParen);
-                }
-                expr
-            }
-            Some(Token::If) => {
-                let cond = self.parse_expr(Prec::Lowest)?.unwrap();
-                if self.0.next() != Some(&Token::Then) {
-                    return Err(Error::ClosingParen);
-                }
-                let a = self.parse_expr(Prec::Lowest)?.unwrap();
-                if self.0.next() != Some(&Token::Else) {
-                    return Err(Error::ClosingParen);
-                }
-                let b = self.parse_expr(Prec::Lowest)?.unwrap();
-                Ok(Some(Expr::If(Box::new(cond), Box::new(a), Box::new(b))))
-            }
-            Some(Token::Minus) => Ok(self
-                .parse_expr(Prec::Prefix)?
-                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr)))),
-            Some(Token::Not) => Ok(self
-                .parse_expr(Prec::Prefix)?
-                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Not), Box::new(expr)))),
-            Some(t) => Err(Error::PrefixFn(t.to_string())),
+    fn is_right_assoc(tok: &Token) -> bool {
+        match tok {
+            Token::Exp | Token::Arrow => true,
+            _ => false,
         }
+    }
+
+    fn parse_prefix(&mut self) -> Result<Option<Expr>, Error> {
+        let val = match self.0.next() {
+            None => return Ok(None),
+            Some(v) => v,
+        };
+        Ok(match val {
+            Token::Int(i) => Some(Expr::Int(*i)),
+            Token::Bool(b) => Some(Expr::Bool(*b)),
+            Token::Ident(i) => Some(Expr::Var(str::from_utf8(i).unwrap().to_string())),
+            Token::LParen => {
+                let expr = self.parse_expr(Prec::Lowest);
+                self.0.expect_or(&Token::RParen, Error::ClosingParen)?;
+                expr?
+            }
+            Token::If => {
+                let cond = self.parse_expr(Prec::Lowest)?.unwrap();
+                self.0.expect_or(&Token::Then, Error::ClosingParen)?;
+                let a = self.parse_expr(Prec::Lowest)?.unwrap();
+                self.0.expect_or(&Token::Else, Error::ClosingParen)?;
+                let b = self.parse_expr(Prec::Lowest)?.unwrap();
+                Some(Expr::If(Box::new(cond), Box::new(a), Box::new(b)))
+            }
+            Token::Minus => self
+                .parse_expr(Prec::Prefix)?
+                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr))),
+            Token::Not => self
+                .parse_expr(Prec::Prefix)?
+                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Not), Box::new(expr))),
+            t => return Err(Error::PrefixFn(t.to_string())),
+        })
     }
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
@@ -273,7 +275,7 @@ mod tests {
             ("2 ** 2 * 2", "((2 ** 2) * 2);"),
             ("2 ** 2 ** 2", "(2 ** (2 ** 2));"),
             ("x => 1 + 1", "(x => (1 + 1));"),
-            ("x => y => x + y", "(x => (y => (x + y)));")
+            ("x => y => x + y", "(x => (y => (x + y)));"),
         ];
 
         for (input, expected) in tests {

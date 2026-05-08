@@ -1,3 +1,3 @@
-fn main() {
-    orca::start();
+fn main() -> Result<(), std::io::Error> {
+    orca::start()
 }

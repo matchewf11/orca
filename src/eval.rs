@@ -1,15 +1,9 @@
 use crate::{
     ast::{Expr, InfixOp, PrefixOp, Program, Stmt},
+    builtin::find_builtin,
+    env::{Env, EnvRef},
     value::Value,
-    env::Env,
 };
-use std::{collections::HashMap, fmt};
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidType,
-    NullVar(String),
-}
 
 #[derive(Debug)]
 pub struct Eval(Program);
@@ -19,110 +13,97 @@ impl Eval {
         Self(prog)
     }
 
-    pub fn eval<'a>(&self, env: &mut Env) -> Result<Option<Value>, Error> {
-        let mut return_val = None;
-        for stmt in &self.0 {
-            return_val = Self::eval_stmt(stmt, env)?;
+    pub fn eval(self, env: EnvRef) -> Value {
+        let mut return_val = Value::Null;
+
+        for stmt in self.0 {
+            return_val = match Self::eval_stmt(stmt, env.clone()) {
+                // early return on an error (throwing)
+                Value::Error(e) => return Value::Error(e),
+
+                v => v,
+            };
         }
-        Ok(return_val)
+
+        return_val
     }
 
-    fn eval_stmt(stmt: &Stmt, env: &mut Env) -> Result<Option<Value>, Error> {
+    fn eval_stmt(stmt: Stmt, env: EnvRef) -> Value {
         use Stmt::*;
         match stmt {
-            Expr(e) => Self::eval_expr(e, env).map(Some),
+            Expr(e) => Self::eval_expr(e, env),
             Bind(n, e) => {
-                env.insert(n.to_string(), Self::eval_expr(e, env)?);
-                Ok(None)
+                let expr = Self::eval_expr(e, env.clone());
+                if matches!(expr, Value::Error(_)) {
+                    expr
+                } else {
+                    env.borrow_mut().insert(n, expr);
+                    Value::Null
+                }
             }
         }
     }
 
-    fn eval_expr(expr: &Expr, env: &Env) -> Result<Value, Error> {
+    fn eval_expr(expr: Expr, env: EnvRef) -> Value {
         use Expr::*;
+        use PrefixOp::*;
         match expr {
-            Int(i) => Ok(Value::Int(*i)),
-            Bool(i) => Ok(Value::Bool(*i)),
-            If(cond, a, b) => {
-                let cond = Self::eval_expr(cond, env)?;
-                match cond {
-                    Value::Bool(true) => Ok(Self::eval_expr(a, env)?),
-                    Value::Bool(false) => Ok(Self::eval_expr(b, env)?),
-                    _ => return Err(Error::InvalidType),
-                }
-            }
-            Infix(lhs, op, rhs) => {
-                match (lhs.as_ref(), op) {
-                    (Expr::Var(s), InfixOp::Arrow) => {
-                        return Ok(Value::Fn(s.to_string(), *rhs.clone(), env.clone()));
-                    },
-                    _ => (),
-                }
-
-                let lhs = Self::eval_expr(lhs, env)?;
-                let rhs = Self::eval_expr(rhs, env)?;
-                match (lhs, op, rhs) {
-                    (Value::Bool(n), InfixOp::And, Value::Bool(m)) => Ok(Value::Bool(n && m)),
-                    (_, InfixOp::And, _) => Err(Error::InvalidType),
-                    (Value::Bool(n), InfixOp::Or, Value::Bool(m)) => Ok(Value::Bool(n || m)),
-                    (_, InfixOp::Or, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Lte, Value::Int(m)) => Ok(Value::Bool(n <= m)),
-                    (_, InfixOp::Lte, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Gte, Value::Int(m)) => Ok(Value::Bool(n >= m)),
-                    (_, InfixOp::Gte, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Lt, Value::Int(m)) => Ok(Value::Bool(n < m)),
-                    (_, InfixOp::Lt, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Gt, Value::Int(m)) => Ok(Value::Bool(n > m)),
-                    (_, InfixOp::Gt, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Add, Value::Int(m)) => Ok(Value::Int(n + m)),
-                    (_, InfixOp::Add, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Sub, Value::Int(m)) => Ok(Value::Int(n - m)),
-                    (_, InfixOp::Sub, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Mul, Value::Int(m)) => Ok(Value::Int(n * m)),
-                    (_, InfixOp::Mul, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Div, Value::Int(m)) => Ok(Value::Int(n / m)),
-                    (_, InfixOp::Div, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Mod, Value::Int(m)) => Ok(Value::Int(n % m)),
-                    (_, InfixOp::Mod, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Eq, Value::Int(m)) => Ok(Value::Bool(n == m)),
-                    (Value::Bool(n), InfixOp::Eq, Value::Bool(m)) => Ok(Value::Bool(n == m)),
-                    (_, InfixOp::Eq, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::NEq, Value::Int(m)) => Ok(Value::Bool(n != m)),
-                    (Value::Bool(n), InfixOp::NEq, Value::Bool(m)) => Ok(Value::Bool(n != m)),
-                    (_, InfixOp::NEq, _) => Err(Error::InvalidType),
-                    (Value::Int(n), InfixOp::Exp, Value::Int(m)) => Ok(Value::Int(n.pow(m as u32))),
-                    (_, InfixOp::Exp, _) => Err(Error::InvalidType),
-                    (_, InfixOp::Arrow, _) => Err(Error::InvalidType),
-                }
-            }
-            Prefix(op, arg) => {
-                let arg = Self::eval_expr(arg, env)?;
-                use PrefixOp::*;
-                match (op.as_ref(), arg) {
-                    (Neg, Value::Int(n)) => Ok(Value::Int(-n)),
-                    (Neg, _) => Err(Error::InvalidType),
-                    (Not, Value::Bool(n)) => Ok(Value::Bool(!n)),
-                    (Not, _) => Err(Error::InvalidType),
-                    (Call(fun), call_arg) => {
-                        match Self::eval_expr(fun, env)? {
-                            Value::Fn(fn_arg_name, fn_body, mut fn_env) => {
-                                let mut fn_env = Env::new_inner(fn_env);
-                                fn_env.insert(fn_arg_name.to_string(), call_arg);
-                                Self::eval_expr(&dbg!(fn_body), &dbg!(fn_env))
-                            },
-                            _ => Err(Error::InvalidType),
+            Int(i) => Value::Int(i),
+            Bool(b) => Value::Bool(b),
+            Var(n) => env
+                .borrow()
+                .get(&n)
+                .unwrap_or(find_builtin(&n).map(Value::Builtin).unwrap_or(Value::Null)),
+            If(cond, a, b) => match Self::eval_expr(*cond, env.clone()) {
+                Value::Bool(true) => Self::eval_expr(*a, env),
+                Value::Bool(false) => Self::eval_expr(*b, env),
+                v => Value::Error(format!("If Statement Condition can't be: {v}")),
+            },
+            Prefix(op, arg) => match (*op, Self::eval_expr(*arg, env.clone())) {
+                (Neg, Value::Int(n)) => Value::Int(-n),
+                (Not, Value::Bool(n)) => Value::Bool(!n),
+                (Call(fun), call_arg) => match Self::eval_expr(fun, env) {
+                    Value::Builtin(b) => b(call_arg),
+                    Value::Fn(fn_arg_name, fn_body, fn_env) => {
+                        let fn_env = Env::new_inner_wrapped(fn_env);
+                        fn_env
+                            .borrow_mut()
+                            .insert(fn_arg_name.to_string(), call_arg);
+                        Self::eval_expr(fn_body, fn_env)
+                    }
+                    v => Value::Error(format!("Need a function: {v}")),
+                },
+                (op, val) => Value::Error(format!("Can't use '{op}' for value: {val}")),
+            },
+            Infix(lhs, op, rhs) => match (*lhs, op, *rhs) {
+                (Expr::Var(s), InfixOp::Arrow, rhs) => Value::Fn(s, rhs, Env::branch(env)),
+                (lhs, op, rhs) => {
+                    let lhs = Self::eval_expr(lhs, env.clone());
+                    let rhs = Self::eval_expr(rhs, env);
+                    match (lhs, op, rhs) {
+                        (Value::Bool(n), InfixOp::And, Value::Bool(m)) => Value::Bool(n && m),
+                        (Value::Bool(n), InfixOp::Or, Value::Bool(m)) => Value::Bool(n || m),
+                        (Value::Int(n), InfixOp::Lte, Value::Int(m)) => Value::Bool(n <= m),
+                        (Value::Int(n), InfixOp::Gte, Value::Int(m)) => Value::Bool(n >= m),
+                        (Value::Int(n), InfixOp::Lt, Value::Int(m)) => Value::Bool(n < m),
+                        (Value::Int(n), InfixOp::Gt, Value::Int(m)) => Value::Bool(n > m),
+                        (Value::Int(n), InfixOp::Add, Value::Int(m)) => Value::Int(n + m),
+                        (Value::Int(n), InfixOp::Sub, Value::Int(m)) => Value::Int(n - m),
+                        (Value::Int(n), InfixOp::Mul, Value::Int(m)) => Value::Int(n * m),
+                        (Value::Int(n), InfixOp::Div, Value::Int(m)) => Value::Int(n / m),
+                        (Value::Int(n), InfixOp::Mod, Value::Int(m)) => Value::Int(n % m),
+                        (Value::Int(n), InfixOp::Exp, Value::Int(m)) => Value::Int(n.pow(m as u32)),
+                        (Value::Int(n), InfixOp::Eq, Value::Int(m)) => Value::Bool(n == m),
+                        (Value::Bool(n), InfixOp::Eq, Value::Bool(m)) => Value::Bool(n == m),
+                        (Value::Int(n), InfixOp::NEq, Value::Int(m)) => Value::Bool(n != m),
+                        (Value::Bool(n), InfixOp::NEq, Value::Bool(m)) => Value::Bool(n != m),
+                        (lhs, op, rhs) => {
+                            Value::Error(format!("{op} not supported for {lhs} and {rhs}"))
                         }
-                    },
+                    }
                 }
-            }
-            Var(n) => env.get(n).ok_or(Error::NullVar(n.to_string())).cloned(),
+            },
         }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error")
     }
 }
 
@@ -130,12 +111,12 @@ impl fmt::Display for Error {
 mod tests {
     use super::*;
     use crate::{lexer::Lexer, parser::Parser};
-    use std::collections::HashMap;
+    use std::{cell::RefCell, rc::Rc};
 
     #[test]
     fn test_eval_single_expr() {
         let tests = [
-            ("", None, ""),
+            ("", Some(Value::Null), ""),
             ("1", Some(Value::Int(1)), ""),
             ("true", Some(Value::Bool(true)), ""),
             ("1 + 1", Some(Value::Int(2)), ""),
@@ -177,17 +158,16 @@ mod tests {
             ("one = 1; one", Some(Value::Int(1)), ""),
             ("one = 1 + 1; one", Some(Value::Int(2)), ""),
             ("one = 1; two = one + one; two", Some(Value::Int(2)), ""),
-            ("x => 1", Some(Value::Fn("x".to_string(), Expr::Int(1), Env::new())), ""),
         ];
 
         for (input, expected, desc) in tests {
-            let mut env = Env::new();
+            let env = Env::new();
             let tokens = Lexer::new(input.as_bytes())
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
             let program = Parser::new(&tokens).parse_program().unwrap();
-            let eval = Eval::new(program).eval(&mut env).unwrap();
-            assert_eq!(eval, expected, "{desc}");
+            let eval = Eval::new(program).eval(Rc::new(RefCell::new(env)));
+            assert_eq!(eval, expected.unwrap(), "{desc}");
         }
     }
 
@@ -195,11 +175,20 @@ mod tests {
     fn test_lambda() {
         let tests = [
             (
+                "x => 1",
+                Some(Value::Fn(
+                    "x".to_string(),
+                    Expr::Int(1),
+                    Rc::new(RefCell::new(Env::new())),
+                )),
+                "",
+            ),
+            (
                 "y = 1; x => 1",
                 Some(Value::Fn(
                     "x".to_string(),
                     Expr::Int(1),
-                    Env::from([("y".to_string(), Value::Int(1))]),
+                    Rc::new(RefCell::new(Env::from([("y".to_string(), Value::Int(1))]))),
                 )),
                 "",
             ),
@@ -208,56 +197,40 @@ mod tests {
                 Some(Value::Fn(
                     "x".to_string(),
                     Expr::Int(1),
-                    Env::new(),
+                    Rc::new(RefCell::new(Env::new())),
                 )),
                 "",
             ),
-            (
-                "y = x => 1; y 0",
-                Some(Value::Int(1)),
-                "d",
-            ),
-            (
-                "a = 1; y = x => a; y 0",
-                Some(Value::Int(1)),
-                "d",
-            ),
-            (
-                "y = x => x; y 0",
-                Some(Value::Int(0)),
-                "c",
-            ),
-            (
-                "(x => x) 0",
-                Some(Value::Int(0)),
-                "b",
-            ),
-            (
-                "x = 10; y = x => x; y 0",
-                Some(Value::Int(0)),
-                "a",
-            ),
+            ("y = x => 1; y 0", Some(Value::Int(1)), "d"),
+            ("a = 1; y = x => a; y 0", Some(Value::Int(1)), "d"),
+            ("y = x => x; y 0", Some(Value::Int(0)), "c"),
+            ("(x => x) 0", Some(Value::Int(0)), "b"),
+            ("x = 10; y = x => x; y 0", Some(Value::Int(0)), "a"),
             (
                 "add = x => y => x + y; add_two = add 2; add_two 4",
                 Some(Value::Int(6)),
                 "a",
             ),
             (
-                "fact = x => if x == 0 then 1 else x * fact x - 1; fact 3",
+                "fact = self => n => if n == 0 then 1 else n * self self (n - 1); fact fact 3",
                 Some(Value::Int(6)),
+                "recursion",
+            ),
+            (
+                "fib = self => x => if x < 2 then x else self self (x - 1) + self self (x - 2); fib fib 10",
+                Some(Value::Int(55)),
                 "recursion",
             ),
         ];
 
         for (input, expected, desc) in tests {
-            let mut env = Env::new();
+            let env = Env::new();
             let tokens = Lexer::new(input.as_bytes())
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
             let program = Parser::new(&tokens).parse_program().unwrap();
-            let eval = Eval::new(program).eval(&mut env).unwrap();
-            assert_eq!(eval, expected, "{desc}");
+            let eval = Eval::new(program).eval(Rc::new(RefCell::new(env)));
+            assert_eq!(eval, expected.unwrap(), "{desc}");
         }
-
     }
 }

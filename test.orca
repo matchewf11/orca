@@ -1,3 +1,8 @@
 #!/home/matchew/coding/orca/target/debug/orca
 
-1
+fib_rec self n =
+    if n < 2
+        then n
+        else self self (n - 2) + self self (n - 1);
+
+fib = fib_rec fib_rec;
