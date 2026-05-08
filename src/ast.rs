@@ -43,6 +43,7 @@ pub enum InfixOp {
     And,
     Or,
     Exp,
+    Arrow,
 }
 
 #[derive(Debug)]
@@ -67,6 +68,7 @@ impl TryFrom<&Token<'_>> for InfixOp {
             Token::Lte => InfixOp::Lte,
             Token::And => InfixOp::And,
             Token::Or => InfixOp::Or,
+            Token::Arrow => InfixOp::Arrow,
             Token::Exp => InfixOp::Exp,
             _ => return Err(Error::InvalidToken),
         })
@@ -122,6 +124,7 @@ impl fmt::Display for InfixOp {
             And => "&&",
             Or => "||",
             Exp => "**",
+            Arrow => "=>",
         };
         write!(f, "{s}")
     }

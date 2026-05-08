@@ -27,6 +27,7 @@ pub enum Token<'a> {
     If,
     Then,
     Else,
+    Arrow,
 }
 
 impl fmt::Display for Token<'_> {
@@ -58,6 +59,7 @@ impl fmt::Display for Token<'_> {
             If => "if",
             Then => "then",
             Else => "else",
+            Arrow => "=>",
         };
         write!(f, "{s}")
     }

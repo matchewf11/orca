@@ -33,14 +33,15 @@ impl fmt::Display for Error {
 #[derive(PartialOrd, PartialEq)]
 enum Prec {
     Lowest,
+    Lambda,
     Or,
     And,
     Equality,
     Relational,
     Sum,
     Product,
-    Exponent,
     Prefix,
+    Exponent,
     Call,
 }
 
@@ -49,6 +50,7 @@ impl Prec {
         use Prec::*;
         use Token::*;
         match token {
+            Arrow => Lambda,
             Exp => Exponent,
             Token::And => Prec::And,
             Token::Or => Prec::Or,
@@ -110,8 +112,16 @@ impl<'a> Parser<'a> {
             o => return o,
         };
 
+        // handle right associativity better
         while let Some(tok) = self.0.peek()
-            && prec < Prec::token_prec(tok)
+            && if
+                !matches!(tok, Token::Exp)
+                && !matches!(tok, Token::Arrow)
+            {
+                prec < Prec::token_prec(tok)
+            } else {
+                prec <= Prec::token_prec(tok)
+            }
         {
             lhs = self.parse_infix(lhs)?;
         }
@@ -159,7 +169,6 @@ impl<'a> Parser<'a> {
             Token::Lte
             | Token::Gte
             | Token::Lt
-            | Token::Exp
             | Token::Gt
             | Token::Mod
             | Token::Plus
@@ -169,6 +178,8 @@ impl<'a> Parser<'a> {
             | Token::Or
             | Token::Mult
             | Token::Eq
+            | Token::Exp
+            | Token::Arrow
             | Token::NEq => {
                 let op = self.0.next().unwrap();
                 let rhs = self
@@ -256,8 +267,13 @@ mod tests {
             ("2 <= x < 2", "((2 <= x) < 2);"),
             ("true && false || true", "((true && false) || true);"),
             ("true && 2 == 1", "(true && (2 == 1));"),
+            ("true || 2 == 1", "(true || (2 == 1));"),
             ("2 ** -2", "(2 ** (- 2));"),
+            ("-2 ** 2", "(- (2 ** 2));"),
             ("2 ** 2 * 2", "((2 ** 2) * 2);"),
+            ("2 ** 2 ** 2", "(2 ** (2 ** 2));"),
+            ("x => 1 + 1", "(x => (1 + 1));"),
+            ("x => y => x + y", "(x => (y => (x + y)));")
         ];
 
         for (input, expected) in tests {

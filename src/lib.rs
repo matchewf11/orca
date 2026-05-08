@@ -7,5 +7,6 @@ mod parser;
 mod repl;
 mod token;
 mod value;
+mod cli;
 
-pub use repl::start;
+pub use cli::start;

@@ -1,9 +1,11 @@
 use std::fmt;
+use crate::{env::Env, ast::Expr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
     Bool(bool),
+    Fn(String, Expr, Env),
 }
 
 impl fmt::Display for Value {
@@ -12,6 +14,7 @@ impl fmt::Display for Value {
         match self {
             Int(i) => write!(f, "{i}"),
             Bool(i) => write!(f, "{i}"),
+            Fn(a, e , env) => write!(f, "()"),
         }
     }
 }

@@ -55,7 +55,6 @@ impl<'a> Iterator for Lexer<'a> {
                     Some(self.read_number().map(Token::Int).map_err(Error::Number))
                 }
                 c if c.is_ascii_alphabetic() => Some(Ok(Token::lookup_keyword(self.read_ident()))),
-
                 b'&' => {
                     self.0.next();
                     Some(if self.0.next() == Some(&b'&') {
@@ -88,6 +87,9 @@ impl<'a> Iterator for Lexer<'a> {
                     if self.0.peek() == Some(&b'=') {
                         self.0.next();
                         Some(Ok(Token::Eq))
+                    } else if self.0.peek() == Some(&b'>') {
+                        self.0.next();
+                        Some(Ok(Token::Arrow))
                     } else {
                         Some(Ok(Token::Assign))
                     }
@@ -143,7 +145,8 @@ mod tests {
         200-12 * (foo / bar);
         add_two x = x + 2;
         foo = true;
-        bar = false;
+        bar = false; # foo
+        # foo
         -1;
         1 == 1;
         1 != 1;
@@ -156,6 +159,7 @@ mod tests {
         1 || 1;
         1 && 1;
         1 ** 1;
+        x => 1;
         ";
 
         assert_eq!(
@@ -230,6 +234,10 @@ mod tests {
                 Token::Semicolon,
                 Token::Int(1),
                 Token::Exp,
+                Token::Int(1),
+                Token::Semicolon,
+                Token::Ident(b"x"),
+                Token::Arrow,
                 Token::Int(1),
                 Token::Semicolon,
             ],
