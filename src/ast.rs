@@ -44,6 +44,9 @@ pub enum InfixOp {
     Or,
     Exp,
     Arrow,
+    Dot,
+    Dollar,
+    Pipe,
 }
 
 #[derive(Debug)]
@@ -69,6 +72,9 @@ impl<'a> TryFrom<&'a Token<'a>> for InfixOp {
             Token::Or => InfixOp::Or,
             Token::Arrow => InfixOp::Arrow,
             Token::Exp => InfixOp::Exp,
+            Token::Dollar => InfixOp::Dollar,
+            Token::Pipe => InfixOp::Pipe,
+            Token::Dot => InfixOp::Dot,
             t => return Err(Error(t)),
         })
     }
@@ -124,6 +130,9 @@ impl fmt::Display for InfixOp {
             Or => "||",
             Exp => "**",
             Arrow => "=>",
+            Dollar => "$",
+            Pipe => "|>",
+            Dot => ".",
         };
         write!(f, "{s}")
     }

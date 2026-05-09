@@ -3,16 +3,10 @@ use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 pub type EnvRef = Rc<RefCell<Env>>;
 
-#[derive(PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Env {
     inner: HashMap<String, Value>,
     outer: Option<EnvRef>,
-}
-
-impl fmt::Debug for Env {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "hello")
-    }
 }
 
 impl Env {
@@ -54,12 +48,10 @@ impl Env {
     }
 
     pub fn get(&self, k: &str) -> Option<Value> {
-        match self.inner.get(k) {
-            None => match &self.outer {
-                None => None,
-                Some(o) => o.borrow().get(k).clone(),
-            },
-            v => v.cloned(),
-        }
+        self
+            .inner
+            .get(k)
+            .cloned()
+            .or_else(|| self.outer.as_ref().and_then(|o| o.borrow().get(k).clone()))
     }
 }

@@ -33,12 +33,13 @@ impl<'a, T> Cursor<'a, T> {
         self.pos += n;
     }
 
+    /// Leaves the last value on
     pub fn eat_while<F>(&mut self, mut f: F) -> &'a [T]
     where
         F: FnMut(&T) -> bool,
     {
         let start = self.pos;
-        self.pos += self.input[self.pos..]
+        self.pos += self.input[start..]
             .iter()
             .take_while(|item| f(item))
             .count();

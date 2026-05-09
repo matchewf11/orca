@@ -28,9 +28,9 @@ pub enum Token<'a> {
     Then,
     Else,
     Arrow,
-    // .
-    // $
-    // |>
+    Dot,
+    Dollar,
+    Pipe,
 }
 
 impl fmt::Display for Token<'_> {
@@ -63,6 +63,9 @@ impl fmt::Display for Token<'_> {
             Then => "then",
             Else => "else",
             Arrow => "=>",
+            Dollar => "$",
+            Pipe => "|>",
+            Dot => ".",
         };
         write!(f, "{s}")
     }

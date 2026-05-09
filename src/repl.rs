@@ -1,6 +1,9 @@
 use crate::{env::Env, evaluate};
 use std::io::{self, Write};
 
+// use this instead
+// trait Repl<C> {}
+
 pub fn start() {
     let env = Env::new_wrapped();
     loop {

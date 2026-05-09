@@ -1,3 +1,5 @@
-fn main() -> Result<(), std::io::Error> {
+use std::io::Error;
+
+fn main() -> Result<(), Error> {
     orca::start()
 }
