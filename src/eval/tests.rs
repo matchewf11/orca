@@ -8,6 +8,7 @@ fn test_eval_single_expr() {
         ("", Some(Value::Null), ""),
         ("1", Some(Value::Int(1)), ""),
         ("true", Some(Value::Bool(true)), ""),
+        ("null", Some(Value::Null), ""),
         ("1 + 1", Some(Value::Int(2)), ""),
         ("1 - 1", Some(Value::Int(0)), ""),
         ("3 * 2", Some(Value::Int(6)), ""),

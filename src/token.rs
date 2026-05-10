@@ -31,6 +31,7 @@ pub enum Token<'a> {
     Dot,
     Dollar,
     Pipe,
+    Null,
 }
 
 impl fmt::Display for Token<'_> {
@@ -61,6 +62,7 @@ impl fmt::Display for Token<'_> {
             Exp => "**",
             If => "if",
             Then => "then",
+            Null => "null",
             Else => "else",
             Arrow => "=>",
             Dollar => "$",

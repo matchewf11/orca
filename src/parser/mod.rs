@@ -1,8 +1,8 @@
 use crate::{
     ast::{Expr, InfixOp, PrefixOp, Program, Stmt},
     cursor::Cursor,
-    token::Token,
     prec::Prec,
+    token::Token,
 };
 use std::fmt;
 
@@ -15,6 +15,8 @@ pub enum Error {
     FnBody,
     ClosingParen,
     InfixRhs,
+    ExprStart,
+    If,
 }
 
 impl fmt::Display for Error {
@@ -26,6 +28,8 @@ impl fmt::Display for Error {
             FnBody => "function has no body",
             ClosingParen => "parenthesis are not closed",
             InfixRhs => "no rhs to the infix",
+            ExprStart => "expr start",
+            If => "if",
         };
         write!(f, "{s}")
     }
@@ -50,12 +54,7 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_expr(Prec::Lowest)?.map(Into::into)
         };
-
-        // consume ';' if there
-        if self.0.peek() == Some(&Token::Semicolon) {
-            self.0.next();
-        }
-
+        self.0.eat_if_eq(&Token::Semicolon);
         Ok(stmt)
     }
 
@@ -76,16 +75,13 @@ impl<'a> Parser<'a> {
         }
 
         self.0.eat_n(2 + args.len());
-        let mut expr = self.parse_expr(Prec::Lowest)?.ok_or(Error::FnBody)?;
-        args.reverse();
-        for arg in args {
-            expr = Expr::Infix(
-                Box::new(Expr::Var(str::from_utf8(arg).unwrap().to_string())),
-                InfixOp::Arrow,
-                Box::new(expr),
-            )
-        }
-        Ok(Some((str::from_utf8(name).unwrap().to_string(), expr)))
+
+        let body = args.into_iter().rfold(
+            self.parse_expr(Prec::Lowest)?.ok_or(Error::FnBody)?,
+            |acc, arg| Expr::new_infix(Expr::new_var(arg), InfixOp::Arrow, acc),
+        );
+
+        Ok(Some((str::from_utf8(name).unwrap().to_string(), body)))
     }
 
     fn parse_expr(&mut self, prec: Prec) -> Result<Option<Expr>, Error> {
@@ -95,21 +91,16 @@ impl<'a> Parser<'a> {
         };
 
         while let Some(tok) = self.0.peek()
-            && if Self::is_right_assoc(tok) {
-                prec <= Prec::token_prec(tok)
+            && if Prec::is_right_assoc(tok) {
+                prec <= Prec::token_prec_infix(tok).ok_or(Error::ExprStart)?
             } else {
-                prec < Prec::token_prec(tok)
+                prec < Prec::token_prec_infix(tok).ok_or(Error::ExprStart)?
             }
         {
             lhs = self.parse_infix(lhs)?;
         }
 
         Ok(Some(lhs))
-    }
-
-    // move to prec
-    fn is_right_assoc(tok: &Token) -> bool {
-        matches!(tok, Token::Dot | Token::Dollar | Token::Exp | Token::Arrow)
     }
 
     fn parse_prefix(&mut self) -> Result<Option<Expr>, Error> {
@@ -119,6 +110,7 @@ impl<'a> Parser<'a> {
         };
         Ok(match val {
             Token::Int(i) => Some(Expr::Int(*i)),
+            Token::Null => Some(Expr::Null),
             Token::Bool(b) => Some(Expr::Bool(*b)),
             Token::Ident(i) => Some(Expr::Var(str::from_utf8(i).unwrap().to_string())),
             Token::LParen => {
@@ -127,60 +119,38 @@ impl<'a> Parser<'a> {
                 expr?
             }
             Token::If => {
-                let cond = self.parse_expr(Prec::Lowest)?.unwrap();
+                let cond = self.parse_expr(Prec::Lowest)?.ok_or(Error::If)?;
                 self.0.expect_or(&Token::Then, Error::ClosingParen)?;
-                let a = self.parse_expr(Prec::Lowest)?.unwrap();
+                let a = self.parse_expr(Prec::Lowest)?.ok_or(Error::If)?;
                 self.0.expect_or(&Token::Else, Error::ClosingParen)?;
-                let b = self.parse_expr(Prec::Lowest)?.unwrap();
-                Some(Expr::If(Box::new(cond), Box::new(a), Box::new(b)))
+                let b = self.parse_expr(Prec::Lowest)?.ok_or(Error::If)?;
+                Some(Expr::new_if(cond, a, b))
             }
-            Token::Minus => self
-                .parse_expr(Prec::Prefix)?
-                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Neg), Box::new(expr))),
-            Token::Not => self
-                .parse_expr(Prec::Prefix)?
-                .map(|expr| Expr::Prefix(Box::new(PrefixOp::Not), Box::new(expr))),
-            t => return Err(Error::PrefixFn(t.to_string())),
+            t => {
+                let prefix_op: PrefixOp =
+                    t.try_into().map_err(|_| Error::PrefixFn(t.to_string()))?;
+                self.parse_expr(Prec::Prefix)?
+                    .map(|expr| Expr::new_prefix(prefix_op, expr))
+            }
         })
     }
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
-        match self.0.peek().unwrap() {
-            Token::Lte
-            | Token::Gte
-            | Token::Lt
-            | Token::Gt
-            | Token::Mod
-            | Token::Plus
-            | Token::Minus
-            | Token::Div
-            | Token::And
-            | Token::Or
-            | Token::Mult
-            | Token::Eq
-            | Token::Exp
-            | Token::Arrow
-            | Token::Dot
-            | Token::Dollar
-            | Token::Pipe
-            | Token::NEq => {
-                let op = self.0.next().unwrap();
-                let rhs = self
-                    .parse_expr(Prec::token_prec(op))?
-                    .ok_or(Error::InfixRhs)?;
-                Ok(Expr::Infix(
-                    Box::new(lhs),
-                    op.try_into().unwrap(),
-                    Box::new(rhs),
-                ))
-            }
-            Token::Ident(..) | Token::Int(..) | Token::LParen | Token::Bool(..) => {
-                Ok(Expr::Prefix(
-                    Box::new(PrefixOp::Call(lhs)),
-                    Box::new(self.parse_expr(Prec::Call)?.ok_or(Error::FnBody)?),
-                ))
-            }
-            t => Err(Error::InfixFn(t.to_string())),
+        use Token::*;
+        let t = self.0.peek().ok_or(Error::InfixRhs)?;
+        if let Ok(op) = t.try_into()
+            && let Some(pr) = Prec::token_prec_infix(t)
+        {
+            self.0.next();
+            let rhs = self.parse_expr(pr)?.ok_or(Error::InfixRhs)?;
+            Ok(Expr::new_infix(lhs, op, rhs))
+        } else if Prec::token_prec_infix(t) == Some(Prec::Call) {
+            Ok(Expr::new_prefix(
+                PrefixOp::Call(lhs),
+                self.parse_expr(Prec::Call)?.ok_or(Error::FnBody)?,
+            ))
+        } else {
+            Err(Error::InfixFn(t.to_string()))
         }
     }
 }

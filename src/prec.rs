@@ -1,4 +1,32 @@
 use crate::token::Token::{self, *};
+use std::cmp::Ordering;
+
+impl Prec {
+    pub fn token_prec_infix(token: &Token) -> Option<Self> {
+        use Prec::*;
+        Some(match token {
+            Token::And => Prec::And,
+            Token::Or => Prec::Or,
+            Token::Pipe => Prec::Pipe,
+            Null | Ident(_) | Int(_) | LParen | Bool(_) => Call,
+            Then | Else | Semicolon | RParen => Lowest,
+            Dollar => Apply,
+            Arrow => Lambda,
+            Exp => Exponent,
+            Lte | Gte | Lt | Gt => Relational,
+            Not => Prefix,
+            Eq | NEq => Equality,
+            Mod | Mult | Div => Product,
+            Dot => Compose,
+            Plus | Minus => Sum,
+            Token::Assign | Token::If => return None,
+        })
+    }
+
+    pub fn is_right_assoc(tok: &Token) -> bool {
+        matches!(tok, Token::Dot | Token::Dollar | Token::Exp | Token::Arrow)
+    }
+}
 
 #[derive(PartialOrd, PartialEq)]
 pub enum Prec {
@@ -43,26 +71,3 @@ pub enum Prec {
     // HIGHEST
     Call,
 }
-
-impl Prec {
-    pub fn token_prec(token: &Token) -> Self {
-        use Prec::*;
-        match token {
-            Arrow => Lambda,
-            Exp => Exponent,
-            Token::And => Prec::And,
-            Token::Or => Prec::Or,
-            Token::Pipe => Prec::Pipe,
-            Lte | Gte | Lt | Gt => Relational,
-            If | Then | Else | Semicolon | RParen | Assign => Lowest,
-            Not => Prefix,
-            Eq | NEq => Equality,
-            Plus | Minus => Sum,
-            Mod | Mult | Div => Product,
-            Ident(_) | Int(_) | LParen | Bool(_) => Call,
-            Dot => Compose,
-            Dollar => Apply,
-        }
-    }
-}
-

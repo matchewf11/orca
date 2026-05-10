@@ -8,6 +8,12 @@ impl<'a, T: PartialEq> Cursor<'a, T> {
         self.input.get(self.pos..self.pos + prefix.len()) == Some(prefix)
     }
 
+    pub fn eat_if_eq(&mut self, n: &T) {
+        if self.peek() == Some(n) {
+            self.next();
+        }
+    }
+
     pub fn expect_or<E>(&mut self, v: &T, e: E) -> Result<(), E> {
         match self.next() {
             Some(e) if e == v => Ok(()),

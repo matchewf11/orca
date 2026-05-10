@@ -4,6 +4,7 @@ use super::*;
 fn test_lexer() {
     let input = b"
     # foo
+    null;
     200-12 * (foo / bar);
     add_two x = x + 2;
     foo = true;
@@ -28,6 +29,8 @@ fn test_lexer() {
     assert_eq!(
         &Lexer::new(input).collect::<Result<Vec<_>, _>>().unwrap(),
         &[
+            Token::Null,
+            Token::Semicolon,
             Token::Int(200),
             Token::Minus,
             Token::Int(12),

@@ -1,5 +1,5 @@
 use crate::value::Value;
-use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 pub type EnvRef = Rc<RefCell<Env>>;
 
@@ -48,8 +48,7 @@ impl Env {
     }
 
     pub fn get(&self, k: &str) -> Option<Value> {
-        self
-            .inner
+        self.inner
             .get(k)
             .cloned()
             .or_else(|| self.outer.as_ref().and_then(|o| o.borrow().get(k).clone()))

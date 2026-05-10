@@ -6,10 +6,10 @@ mod env;
 mod eval;
 mod lexer;
 mod parser;
+mod prec;
 mod repl;
 mod token;
 mod value;
-mod prec;
 
 pub use cli::start;
 
@@ -22,7 +22,11 @@ fn evaluate(input: &str, env: env::EnvRef) {
     let res = lexer::Lexer::new(input.as_bytes())
         .collect::<Result<Vec<_>, _>>()
         .map_err(Error::Lexer)
-        .and_then(|t| parser::Parser::new(&t).parse_program().map_err(Error::Parser))
+        .and_then(|t| {
+            parser::Parser::new(&t)
+                .parse_program()
+                .map_err(Error::Parser)
+        })
         .map(|p| eval::Eval::new(p).eval(env));
     match res {
         Ok(v) => println!("{v}"),

@@ -18,6 +18,22 @@ pub enum Expr {
     Infix(Box<Expr>, InfixOp, Box<Expr>),
     Prefix(Box<PrefixOp>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
+    Null,
+}
+
+impl Expr {
+    pub fn new_prefix(op: PrefixOp, expr: Expr) -> Self {
+        Self::Prefix(Box::new(op), Box::new(expr))
+    }
+    pub fn new_infix(lhs: Expr, op: InfixOp, rhs: Expr) -> Self {
+        Self::Infix(Box::new(lhs), op, Box::new(rhs))
+    }
+    pub fn new_var(name: &[u8]) -> Self {
+        Self::Var(str::from_utf8(name).unwrap().to_string())
+    }
+    pub fn new_if(cond: Expr, a: Expr, b: Expr) -> Self {
+        Self::If(Box::new(cond), Box::new(a), Box::new(b))
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,6 +68,46 @@ pub enum InfixOp {
 #[derive(Debug)]
 pub struct Error<'a>(&'a Token<'a>);
 
+impl<'a> TryFrom<&'a Token<'a>> for PrefixOp {
+    type Error = Error<'a>;
+
+    fn try_from(t: &'a Token) -> Result<Self, Self::Error> {
+        Ok(match t {
+            Token::Minus => PrefixOp::Neg,
+            Token::Not => PrefixOp::Not,
+
+            Token::Plus
+            | Token::Mult
+            | Token::Div
+            | Token::Eq
+            | Token::NEq
+            | Token::Mod
+            | Token::Gt
+            | Token::Lt
+            | Token::Null
+            | Token::Gte
+            | Token::Lte
+            | Token::And
+            | Token::Or
+            | Token::Arrow
+            | Token::Exp
+            | Token::Dollar
+            | Token::Pipe
+            | Token::Dot
+            | Token::Ident(..)
+            | Token::Int(..)
+            | Token::Bool(..)
+            | Token::Assign
+            | Token::Semicolon
+            | Token::LParen
+            | Token::RParen
+            | Token::If
+            | Token::Then
+            | Token::Else => return Err(Error(t)),
+        })
+    }
+}
+
 impl<'a> TryFrom<&'a Token<'a>> for InfixOp {
     type Error = Error<'a>;
 
@@ -75,7 +131,18 @@ impl<'a> TryFrom<&'a Token<'a>> for InfixOp {
             Token::Dollar => InfixOp::Dollar,
             Token::Pipe => InfixOp::Pipe,
             Token::Dot => InfixOp::Dot,
-            t => return Err(Error(t)),
+            Token::Ident(..)
+            | Token::Int(..)
+            | Token::Bool(..)
+            | Token::Assign
+            | Token::Semicolon
+            | Token::LParen
+            | Token::RParen
+            | Token::Not
+            | Token::Null
+            | Token::If
+            | Token::Then
+            | Token::Else => return Err(Error(t)),
         })
     }
 }
@@ -91,6 +158,7 @@ impl fmt::Display for Expr {
         use Expr::*;
         match self {
             Int(i) => write!(f, "{i}"),
+            Null => write!(f, "null"),
             Bool(b) => write!(f, "{b}"),
             Var(s) => write!(f, "{s}"),
             Infix(l, o, r) => write!(f, "({l} {o} {r})"),

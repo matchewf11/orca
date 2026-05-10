@@ -13,6 +13,7 @@ impl<'a> Lexer<'a> {
             ("false", Token::Bool(false)),
             ("true", Token::Bool(true)),
             ("then", Token::Then),
+            ("null", Token::Null),
             ("else", Token::Else),
             ("if", Token::If),
             ("||", Token::Or),
@@ -42,12 +43,10 @@ impl<'a> Lexer<'a> {
         .into_iter()
         .filter(|(ident, _)| self.0.is_prefix(ident.as_bytes()));
 
-        matches
-            .max_by_key(|(i, _)| i.len())
-            .map(|(i, v)| {
-                self.0.eat_n(i.len());
-                v
-            })
+        matches.max_by_key(|(i, _)| i.len()).map(|(i, v)| {
+            self.0.eat_n(i.len());
+            v
+        })
     }
 
     fn read_number(&mut self) -> Result<i64, ParseIntError> {
@@ -77,7 +76,10 @@ impl<'a> Iterator for Lexer<'a> {
                 while &b'\n' != self.0.next()? {}
                 self.next()?
             }
-            c if c.is_ascii_digit() => self.read_number().map(Token::Int).map_err(Error::InvalidInt),
+            c if c.is_ascii_digit() => self
+                .read_number()
+                .map(Token::Int)
+                .map_err(Error::InvalidInt),
             c if c.is_ascii_alphabetic() => Ok(Token::Ident(self.read_ident())),
             c => Err(Error::NotFound(*c)),
         })

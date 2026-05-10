@@ -1,5 +1,5 @@
 use crate::{ast::Expr, builtin::Builtin, env::Env};
-use std::{cell::RefCell, fmt, rc::Rc, ptr};
+use std::{cell::RefCell, fmt, ptr, rc::Rc};
 
 #[macro_export]
 macro_rules! error {

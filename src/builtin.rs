@@ -1,4 +1,11 @@
-use crate::{error, env::Env, value::Value, parser::{Parser, Error as ParseError}, eval::Eval, lexer::{Lexer, Error as LexError}};
+use crate::{
+    env::Env,
+    error,
+    eval::Eval,
+    lexer::{Error as LexError, Lexer},
+    parser::{Error as ParseError, Parser},
+    value::Value,
+};
 use std::fs;
 
 pub type Builtin = fn(Value) -> Value;
