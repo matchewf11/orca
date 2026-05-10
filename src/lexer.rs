@@ -58,6 +58,13 @@ impl<'a> Lexer<'a> {
     fn read_ident(&mut self) -> &'a [u8] {
         self.0.eat_while(|b| b.is_ascii_alphabetic() || *b == b'_')
     }
+
+    fn read_string(&mut self) -> Result<&'a [u8], Error> {
+        self.0.expect_or(&b'\"', Error::Unclosed)?;
+        let string = self.0.eat_while(|b| *b != b'\"');
+        self.0.expect_or(&b'\"', Error::Unclosed)?;
+        Ok(string)
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -76,6 +83,7 @@ impl<'a> Iterator for Lexer<'a> {
                 while &b'\n' != self.0.next()? {}
                 self.next()?
             }
+            b'"' => self.read_string().map(Token::String),
             c if c.is_ascii_digit() => self
                 .read_number()
                 .map(Token::Int)
@@ -90,6 +98,7 @@ impl<'a> Iterator for Lexer<'a> {
 pub enum Error {
     NotFound(u8),
     InvalidInt(ParseIntError),
+    Unclosed,
 }
 
 impl fmt::Display for Error {
@@ -98,6 +107,7 @@ impl fmt::Display for Error {
         match self {
             NotFound(b) => write!(f, "Could not find anything for token: {b}"),
             InvalidInt(e) => write!(f, "Could not lex int: {e}"),
+            Unclosed => write!(f, "unclosed string"),
         }
     }
 }

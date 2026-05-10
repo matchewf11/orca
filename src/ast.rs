@@ -15,6 +15,7 @@ pub enum Expr {
     Int(i64),
     Bool(bool),
     Var(Name),
+    String(String),
     Infix(Box<Expr>, InfixOp, Box<Expr>),
     Prefix(Box<PrefixOp>, Box<Expr>),
     If(Box<Expr>, Box<Expr>, Box<Expr>),
@@ -95,6 +96,7 @@ impl<'a> TryFrom<&'a Token<'a>> for PrefixOp {
             | Token::Pipe
             | Token::Dot
             | Token::Ident(..)
+            | Token::String(..)
             | Token::Int(..)
             | Token::Bool(..)
             | Token::Assign
@@ -133,6 +135,7 @@ impl<'a> TryFrom<&'a Token<'a>> for InfixOp {
             Token::Dot => InfixOp::Dot,
             Token::Ident(..)
             | Token::Int(..)
+            | Token::String(..)
             | Token::Bool(..)
             | Token::Assign
             | Token::Semicolon
@@ -160,6 +163,7 @@ impl fmt::Display for Expr {
             Int(i) => write!(f, "{i}"),
             Null => write!(f, "null"),
             Bool(b) => write!(f, "{b}"),
+            String(b) => write!(f, "\"{b}\""),
             Var(s) => write!(f, "{s}"),
             Infix(l, o, r) => write!(f, "({l} {o} {r})"),
             Prefix(o, a) => write!(f, "({o} {a})"),

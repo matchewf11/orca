@@ -4,7 +4,7 @@ use std::{cell::RefCell, fmt, ptr, rc::Rc};
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        crate::value::Value::Error(format!($($arg)*))
+        $crate::value::Value::Error(format!($($arg)*))
     };
 }
 

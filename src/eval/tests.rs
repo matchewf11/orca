@@ -5,6 +5,16 @@ use std::{cell::RefCell, rc::Rc};
 #[test]
 fn test_eval_single_expr() {
     let tests = [
+        ("\"hello\"", Some(Value::String("hello".to_string())), ""),
+        (
+            "\"hello\" + \"world\"",
+            Some(Value::String("helloworld".to_string())),
+            "",
+        ),
+        ("\"hello\" == \"hello\"", Some(Value::Bool(true)), ""),
+        ("\"hello\" == \"hell\"", Some(Value::Bool(false)), ""),
+        ("\"hello\" != \"hello\"", Some(Value::Bool(true)), ""),
+        ("\"hello\" != \"hell\"", Some(Value::Bool(false)), ""),
         ("", Some(Value::Null), ""),
         ("1", Some(Value::Int(1)), ""),
         ("true", Some(Value::Bool(true)), ""),

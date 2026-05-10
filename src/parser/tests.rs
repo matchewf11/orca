@@ -13,6 +13,7 @@ fn program(input: &str) -> Program {
 fn test_parse_expr() {
     let tests = [
         ("null", "null;"),
+        ("\"hello\"", "\"hello\";"),
         ("42", "42;"),
         ("42;", "42;"),
         ("x", "x;"),

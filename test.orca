@@ -6,3 +6,5 @@ fib_rec self n =
         else self self (n - 2) + self self (n - 1);
 
 fib = fib_rec fib_rec;
+
+fib

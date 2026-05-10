@@ -1,5 +1,4 @@
 use crate::token::Token::{self, *};
-use std::cmp::Ordering;
 
 impl Prec {
     pub fn token_prec_infix(token: &Token) -> Option<Self> {
@@ -8,7 +7,7 @@ impl Prec {
             Token::And => Prec::And,
             Token::Or => Prec::Or,
             Token::Pipe => Prec::Pipe,
-            Null | Ident(_) | Int(_) | LParen | Bool(_) => Call,
+            Token::String(_) | Null | Ident(_) | Int(_) | LParen | Bool(_) => Call,
             Then | Else | Semicolon | RParen => Lowest,
             Dollar => Apply,
             Arrow => Lambda,

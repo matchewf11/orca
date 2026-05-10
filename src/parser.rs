@@ -110,6 +110,7 @@ impl<'a> Parser<'a> {
         };
         Ok(match val {
             Token::Int(i) => Some(Expr::Int(*i)),
+            Token::String(i) => Some(Expr::String(str::from_utf8(i).unwrap().to_string())),
             Token::Null => Some(Expr::Null),
             Token::Bool(b) => Some(Expr::Bool(*b)),
             Token::Ident(i) => Some(Expr::Var(str::from_utf8(i).unwrap().to_string())),
@@ -136,7 +137,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_infix(&mut self, lhs: Expr) -> Result<Expr, Error> {
-        use Token::*;
         let t = self.0.peek().ok_or(Error::InfixRhs)?;
         if let Ok(op) = t.try_into()
             && let Some(pr) = Prec::token_prec_infix(t)
