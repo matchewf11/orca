@@ -4,3 +4,5 @@
 - infix
 - floats
 - builtins
+- arrays
+- maps
