@@ -1,0 +1,7 @@
+#!/home/matchew/coding/orca/target/debug/orca
+
+fib = require "fib.orca";
+fib 10;
+
+nil c n = n
+cons h t c n => c h (t c n)
